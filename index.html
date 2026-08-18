@@ -837,9 +837,15 @@ function toggleTodoPriority(item){
 }
 
 /* =========================================================================
-   STORAGE — one key, one payload (per storage-tool guidance). Personal data.
+   STORAGE — talks to the Cloudflare Pages Function at /api/data, which
+   persists one JSON blob to Workers KV. Shared across everyone who has the
+   site password (see ACCESS_PASSWORD below), so this is real shared/team
+   storage rather than a single browser's local data. Last write wins on
+   concurrent edits, same as the rest of this app's editing model.
    ========================================================================= */
-const STORAGE_KEY = "tracker:data";
+const ACCESS_PASSWORD = "PGrights26";
+const API_URL = "/api/data";
+const API_HEADERS = { "Content-Type": "application/json", "x-app-password": ACCESS_PASSWORD };
 let saveTimer = null;
 
 function seedData(){
@@ -904,11 +910,16 @@ function seedData(){
 
 async function loadData(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value) return JSON.parse(res.value);
-  }catch(e){ /* key doesn't exist yet */ }
+    const res = await fetch(API_URL, { headers: API_HEADERS });
+    if(res.ok){
+      const body = await res.json();
+      if(body && body.data) return body.data;
+    }
+  }catch(e){ /* network/API not reachable yet — fall through to seed */ }
   const seeded = seedData();
-  try{ await window.storage.set(STORAGE_KEY, JSON.stringify(seeded), false); }catch(e){}
+  try{
+    await fetch(API_URL, { method: "POST", headers: API_HEADERS, body: JSON.stringify({ data: seeded }) });
+  }catch(e){}
   return seeded;
 }
 function scheduleSave(){
@@ -917,8 +928,8 @@ function scheduleSave(){
   saveTimer = setTimeout(async () => {
     setSaveStatus("Saving…");
     try{
-      await window.storage.set(STORAGE_KEY, JSON.stringify(STATE.data), false);
-      setSaveStatus("Saved");
+      const res = await fetch(API_URL, { method: "POST", headers: API_HEADERS, body: JSON.stringify({ data: STATE.data }) });
+      setSaveStatus(res.ok ? "Saved" : "Save failed");
     }catch(e){
       setSaveStatus("Save failed");
     }
@@ -2758,9 +2769,9 @@ function renderNewItemModal(){
    ACCESS GATE — client-side only. This is a static HTML file with no
    server, so this cannot be real security (anyone can view source and
    read the password below); it's a casual "don't wander in by accident"
-   gate, not access control for sensitive data.
+   gate, not access control for sensitive data. ACCESS_PASSWORD is defined
+   up in the STORAGE section since it's also sent as the API's auth header.
    ========================================================================= */
-const ACCESS_PASSWORD = "PGrights26";
 function showAccessGate(onUnlock){
   const app = document.getElementById("app");
   app.innerHTML = "";
