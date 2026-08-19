@@ -364,6 +364,8 @@
   .date-pair-item{ display:flex; flex-direction:column; gap:2px; }
   .date-pair-item .date-input{ width:150px; }
   .date-pair-label{ font-size:9.5px; color: var(--text-faint); font-family: var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; }
+  .hold-followup-field{ display:flex; flex-direction:column; gap:2px; align-items:flex-end; }
+  .hold-followup-field .date-input{ width:150px; }
   .step-notes-list{ display:flex; flex-direction:column; gap:4px; margin-top:8px; }
   .step-note-line{
     display:flex; align-items:center; gap:8px; font-size:12px; color: var(--text-dim);
@@ -810,6 +812,22 @@ function seqEntryActual(item, entry){ return entry.kind === "preset" ? (item.ste
  * sequence (presets + custom steps) with no actual date yet. */
 function computeNextStep(item){
   migrateTodoConfig(item);
+  // Being on hold overrides everything else in the To-Do view: no matter
+  // what step would normally be next, show a single "Follow Up" entry with
+  // its own target date instead.
+  if(item.estateCategory === "hold" && isValidDate(item.holdFollowUpDate)){
+    return {
+      ref: "__hold_followup__",
+      label: "Follow Up",
+      target: item.holdFollowUpDate,
+      text: "",
+      priority: Boolean(item.todo.priority),
+      assignee: item.todo.assignee || "",
+      pending: true,
+      pendingDays: null,
+      holdFollowUp: true,
+    };
+  }
   const seq = buildStepSequence(item);
   let chosen = seq.find(e => isPending(item, seqEntryRef(e))) || null;
   if(!chosen && item.todo.stepRef){
@@ -929,6 +947,7 @@ function seedData(){
         todo:{ stepRef:"", text:"Confirm replacement spokesperson", priority:false, assignee:"R. Boyd" },
         estateCategory:"hold",
         todoCategory:"pitch",
+        holdFollowUpDate:"2026-09-02",
       },
     ],
     baselines: [
@@ -1024,32 +1043,61 @@ function estateCategoryLabel(key){
 function migrateEstateCategory(item){
   if(!ESTATE_CATEGORIES.some(c => c[0] === item.estateCategory)) item.estateCategory = "in-the-works";
 }
+const HOLD_FOLLOWUP_DAYS = 14;
 function updateEstateCategory(item, value){
   migrateEstateCategory(item);
   const old = item.estateCategory;
   if(old === value) return;
   item.estateCategory = value;
   recordChange(item.id, "item", item.id, item.name, "estateCategory", "Category", estateCategoryLabel(old), estateCategoryLabel(value));
-  if(value === "hold") markPendingForHold(item);
+  if(value === "hold"){
+    const followUp = addDaysISO(todayISO(), HOLD_FOLLOWUP_DAYS);
+    item.holdFollowUpDate = followUp;
+    recordChange(item.id, "item", item.id, item.name, "holdFollowUpDate", "Follow-up date", "", followUp, "Set automatically — marked Hold for Now.");
+    consolidateStepNotesIntoGeneralNotes(item);
+  }
   scheduleSave();
   render();
 }
-/** Marking an estate "Hold for Now" immediately drops it into the Pending
- * window, overriding whatever To-Do category it was showing under — same
- * mechanism as manually toggling a step pending (14-day follow-up clock,
- * editable "Since" date on that step in the Steps panel). Doesn't reset
- * the clock if it's already pending. */
-function markPendingForHold(item){
+/** Once a step's card stops showing in To-Do (replaced by the single
+ * "Follow Up" entry while on hold), its notes are still fully visible on
+ * the Steps panel — but to keep them easy to find in one place, copy them
+ * into the general "Additional Notes" field too. Guarded so re-entering
+ * hold later doesn't duplicate the copy. */
+function consolidateStepNotesIntoGeneralNotes(item){
+  const marker = "Notes carried over from steps (Hold for Now)";
+  if((item.notes || "").includes(marker)) return;
+
   const seq = buildStepSequence(item);
-  const next = seq.find(e => !seqEntryActual(item, e));
-  if(!next) return; // nothing left incomplete to hold on
-  const ref = seqEntryRef(next);
-  migratePendingSteps(item);
-  if(item.stepPending[ref]) return;
-  const label = seqEntryLabel(item, next);
-  const since = todayISO();
-  item.stepPending[ref] = since;
-  recordChange(item.id, "item", item.id, item.name, "pending", label + " marked pending (Hold for Now)", "", "waiting since " + since);
+  const allNotes = [];
+  for(const entry of seq){
+    const stepLbl = seqEntryLabel(item, entry);
+    const notes = entry.kind === "preset"
+      ? ((item.stepNotes && item.stepNotes[entry.field]) || [])
+      : (entry.custom.notes || []);
+    for(const n of notes){
+      const d = isValidDate(n.date) ? n.date : (n.createdAt ? n.createdAt.slice(0, 10) : null);
+      allNotes.push({ stepLabel: stepLbl, date: d, text: n.text });
+    }
+  }
+  if(!allNotes.length) return;
+  allNotes.sort((a, b) => (a.date || "") < (b.date || "") ? -1 : (a.date || "") > (b.date || "") ? 1 : 0);
+
+  const lines = allNotes
+    .map(n => `${n.date ? fmtDateShort(n.date) : "No date"} — ${escapeHtml(n.stepLabel)}: ${n.text}`)
+    .join("<br>");
+  const old = item.notes || "";
+  item.notes = old + (old ? "<br><br>" : "") + `<b>${marker}:</b><br>` + lines;
+  recordChange(item.id, "item", item.id, item.name, "notes", "Additional Notes", old, item.notes, "Step notes carried over — marked Hold for Now.");
+}
+function updateHoldFollowUpDate(item, value){
+  if(!isValidDate(value)) return;
+  const old = item.holdFollowUpDate || "";
+  if(old === value) return;
+  item.holdFollowUpDate = value;
+  recordChange(item.id, "item", item.id, item.name, "holdFollowUpDate", "Follow-up date", old, value);
+  scheduleSave();
+  render();
 }
 
 /* ---- To-Do page: To Call / To Email / Other -------------------------- */
@@ -1677,7 +1725,9 @@ function renderTodoCompleteRow(item){
 function renderTodoRow(item, next, today, isPendingRow){
   const overdue = isValidDate(next.target) && next.target < today;
   let subLine;
-  if(isPendingRow){
+  if(next.holdFollowUp){
+    subLine = isValidDate(next.target) ? `Target ${fmtDateShort(next.target)}` : "No follow-up date set";
+  }else if(isPendingRow){
     const d = next.pendingDays || 0;
     subLine = `Waiting ${d} day${d === 1 ? "" : "s"} — follow up at ${PENDING_FOLLOWUP_DAYS}`;
   }else if(next.text){
@@ -1699,7 +1749,7 @@ function renderTodoRow(item, next, today, isPendingRow){
         </div>
         ${isPendingRow ? `<span class="pill pill-pending">pending</span>` : ""}
         ${next.priority ? `<span class="pill pill-priority">priority</span>` : ""}
-        ${!isPendingRow && overdue ? `<span class="pill pill-late">overdue</span>` : ""}
+        ${(!isPendingRow || next.holdFollowUp) && overdue ? `<span class="pill pill-late">overdue</span>` : ""}
         <button class="todo-edit" title="Customize this to-do" data-role="customize">✎</button>
       </div>
       <div class="todo-config" data-role="config-holder" style="display:none;"></div>
@@ -2020,6 +2070,11 @@ function renderItemDetail(itemId){
         <select class="phase-status-select" id="f-todo-category" style="margin-top:4px;">
           ${TODO_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.todoCategory === k ? "selected" : ""}>To-Do: ${escapeHtml(l)}</option>`).join("")}
         </select>
+        ${item.estateCategory === "hold" ? `
+        <div class="hold-followup-field" style="margin-top:4px;">
+          <span class="date-pair-label">Follow up</span>
+          <input type="date" class="date-input" id="f-hold-followup" value="${item.holdFollowUpDate && isValidDate(item.holdFollowUpDate) ? item.holdFollowUpDate : ""}" />
+        </div>` : ""}
       </div>
     </div>
   `);
@@ -2029,6 +2084,11 @@ function renderItemDetail(itemId){
   head.querySelector("#f-estate-category").onchange = (e) => updateEstateCategory(item, e.target.value);
   migrateTodoCategory(item);
   head.querySelector("#f-todo-category").onchange = (e) => updateTodoCategory(item, e.target.value);
+  const holdFollowUpInput = head.querySelector("#f-hold-followup");
+  if(holdFollowUpInput){
+    wrapDateField(holdFollowUpInput, item.holdFollowUpDate);
+    holdFollowUpInput.onchange = (e) => { if(e.target.value) updateHoldFollowUpDate(item, e.target.value); };
+  }
   head.querySelector("#titles-row").appendChild(renderTitlesSection(item));
   head.querySelector("#estate-contact-row").appendChild(renderEstateContactSection(item));
   wrap.appendChild(head);
