@@ -1030,8 +1030,26 @@ function updateEstateCategory(item, value){
   if(old === value) return;
   item.estateCategory = value;
   recordChange(item.id, "item", item.id, item.name, "estateCategory", "Category", estateCategoryLabel(old), estateCategoryLabel(value));
+  if(value === "hold") markPendingForHold(item);
   scheduleSave();
   render();
+}
+/** Marking an estate "Hold for Now" immediately drops it into the Pending
+ * window, overriding whatever To-Do category it was showing under — same
+ * mechanism as manually toggling a step pending (14-day follow-up clock,
+ * editable "Since" date on that step in the Steps panel). Doesn't reset
+ * the clock if it's already pending. */
+function markPendingForHold(item){
+  const seq = buildStepSequence(item);
+  const next = seq.find(e => !seqEntryActual(item, e));
+  if(!next) return; // nothing left incomplete to hold on
+  const ref = seqEntryRef(next);
+  migratePendingSteps(item);
+  if(item.stepPending[ref]) return;
+  const label = seqEntryLabel(item, next);
+  const since = todayISO();
+  item.stepPending[ref] = since;
+  recordChange(item.id, "item", item.id, item.name, "pending", label + " marked pending (Hold for Now)", "", "waiting since " + since);
 }
 
 /* ---- To-Do page: To Call / To Email / Other -------------------------- */
@@ -1605,7 +1623,7 @@ function renderTodoPanel(items){
 
   if(pendingRows.length){
     pendingRows.sort((a, b) => (b.next.pendingDays || 0) - (a.next.pendingDays || 0));
-    wrap.appendChild(renderTodoCategoryPanel("Pending — Awaiting Response", pendingRows, today, true));
+    wrap.appendChild(renderTodoCategoryPanel("Pending", pendingRows, today, true));
   }
 
   if(completeItems.length){
