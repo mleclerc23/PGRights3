@@ -206,6 +206,7 @@
   .pulse-left .dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
   .pulse-name{ font-weight:700; font-size:13px; }
   .pulse-sub{ color: var(--text-faint); font-size:11px; margin-top:1px; }
+  .estate-categories{ display:flex; flex-direction:column; gap:20px; }
 
   /* ---- To-do ---- */
   .todo-item{ border-bottom:1px solid var(--border-soft); }
@@ -235,13 +236,6 @@
   .todo-config{ padding:0 0 12px 32px; }
   .todo-config-form{ display:flex; gap:8px; flex-wrap:wrap; }
   .todo-config-form .text-input{ flex:1; min-width:140px; }
-  .todo-group-label{
-    font-family: var(--font-mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
-    color: var(--text-faint); margin:16px 0 4px; font-weight:700;
-  }
-  .todo-group-label:first-child{ margin-top:0; }
-  .todo-group-label-pending{ margin-top:22px; padding-top:14px; border-top:1.5px solid var(--ink); color: var(--slate); font-weight:600; }
-  .todo-group-label-complete{ margin-top:22px; padding-top:14px; border-top:1.5px solid var(--ink); color: var(--green); font-weight:600; }
   .todo-complete-check{
     width:20px; height:20px; border-radius:6px; background: var(--green-bg); color: var(--green);
     display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;
@@ -446,8 +440,9 @@
   .summary-list{ display:flex; flex-direction:column; gap:16px; }
   .summary-box{
     background: var(--panel); border:1.5px solid var(--ink); border-radius: var(--radius-lg);
-    padding:20px 22px; box-shadow: var(--shadow-hard);
+    padding:20px 22px; box-shadow: var(--shadow-hard); margin-bottom:16px;
   }
+  .summary-box:last-child{ margin-bottom:0; }
   .summary-box-header{ cursor:pointer; margin-bottom:14px; }
   .summary-box-header h3{ margin:0 0 3px; font-family: var(--font-display); font-size:17px; font-weight:700; }
   .summary-box-header:hover h3{ text-decoration: underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
@@ -580,8 +575,9 @@ function timelineMarkers(start, end){
 
 // [field, label while unfinished (no actual date yet), label once completed]
 const STEP_FIELDS = [
-  ["target_found_contact", "Find Estate Contact", "Found Estate Contact"],
-  ["target_contacted_estate", "Contact Estate", "Contacted Estate"],
+  ["target_call", "Call", "Called"],
+  ["target_pitch", "Make the Pitch", "Pitch Made"],
+  ["target_proposal", "Make the Proposal", "Proposal Made"],
   ["target_rights_secured", "Secure Rights", "Rights Secured"],
 ];
 /** Per-item rename of a preset step — overrides the tensed default below. */
@@ -645,15 +641,16 @@ function itemHealth(data, item){
   return item.status || autoHealth(data, item);
 }
 
-const STEP_BAR_LABELS = { "step-1-2": "Outreach", "step-2-3": "Finalizing" };
+const STEP_BAR_LABELS = { "step-1-2": "Outreach", "step-2-3": "Pitching", "step-3-4": "Finalizing" };
 
 /** Canonical list of bars + milestones for one item. Malformed dates are simply not drawn. */
 function itemScheduleItems(data, item){
   const health = itemHealth(data, item);
   const rightsSecuredActual = item.stepActuals && item.stepActuals.target_rights_secured;
   const out = [
-    { id: "step-1-2", label: STEP_BAR_LABELS["step-1-2"], start: item.target_found_contact, end: item.target_contacted_estate, health },
-    { id: "step-2-3", label: STEP_BAR_LABELS["step-2-3"], start: item.target_contacted_estate, end: item.target_rights_secured, health },
+    { id: "step-1-2", label: STEP_BAR_LABELS["step-1-2"], start: item.target_call, end: item.target_pitch, health },
+    { id: "step-2-3", label: STEP_BAR_LABELS["step-2-3"], start: item.target_pitch, end: item.target_proposal, health },
+    { id: "step-3-4", label: STEP_BAR_LABELS["step-3-4"], start: item.target_proposal, end: item.target_rights_secured, health },
     { id: "rights-secured", label: stepLabel(item, "target_rights_secured"), start: item.target_rights_secured, end: item.target_rights_secured, health: rightsSecuredActual ? "completed" : health, milestone: true },
   ];
   return out.filter(i => isValidDate(i.start) && isValidDate(i.end));
@@ -892,7 +889,7 @@ function seedData(){
         id:"itm_lansdowne", name:"The Lansdowne Estate", owner:"M. Alvarez",
         currentPhase:"Securing Rights", status:"", summary:"Full-catalog rights to the Marlowe Quartet novels.",
         notes:"Co-agent's exclusivity window is the critical path; see flag.",
-        target_found_contact:"2026-05-15", target_contacted_estate:"2026-07-22",
+        target_call:"2026-05-15", target_pitch:"2026-07-22", target_proposal:"2026-10-01",
         target_rights_secured:"2026-12-15", createdAt:now, updatedAt:now,
         titles:["The Marlowe Quartet: Book One", "The Marlowe Quartet: Book Two"],
         estateContacts:[{ id:"ec1", name:"Priya Shah", company:"Lansdowne Estate Trust", phone:"(415) 555-0142", email:"priya@lansdowneestate.example", notes:"" }],
@@ -900,38 +897,44 @@ function seedData(){
           { id:"td1", title:"The Marlowe Quartet: Book One", logline:"A disgraced barrister returns to her family's coastal estate and uncovers a decades-old conspiracy.", genre:"Mystery, Drama", originalOrAdapted:"Adapted", episodeCount:"8", basedOn:"The Marlowe Quartet (novel), by Eleanor Voss", originalRun:"1998–2003 (novel series)", broadcaster:"", adaptations:[{ id:"ad1", text:"TV series (in negotiation)" }, { id:"ad2", text:"Stage rights reserved by the estate" }], notes:"Estate has asked that any pitch materials avoid naming the real-life case the novel was loosely based on." },
         ],
         stepNotes:{
-          target_contacted_estate:[{ id:"sn1", text:"Estate counsel needed extra time to consult the heirs — pushed this 21 days.", date:"2026-06-20", createdAt:now }],
+          target_pitch:[{ id:"sn1", text:"Estate counsel needed extra time to consult the heirs — pushed this 21 days.", date:"2026-06-20", createdAt:now }],
           target_rights_secured:[{ id:"sn2", text:"Estate counsel wants the co-agent question settled before final terms.", date:"2026-07-25", createdAt:now }],
         },
         stepActuals:{
-          target_found_contact:"2026-05-15",
-          target_contacted_estate:"2026-07-27",
+          target_call:"2026-05-15",
+          target_pitch:"2026-07-27",
         },
         todo:{ stepRef:"", text:"", priority:true, assignee:"M. Alvarez" },
+        estateCategory:"in-the-works",
+        todoCategory:"proposal",
       },
       {
         id:"itm_northwind", name:"Northwind Billing v2", owner:"J. Park",
         currentPhase:"Build", status:"", summary:"Rewrite of usage-based billing engine.",
-        notes:"", target_found_contact:"2026-05-10", target_contacted_estate:"2026-06-01",
+        notes:"", target_call:"2026-05-10", target_pitch:"2026-06-01", target_proposal:"2026-08-15",
         target_rights_secured:"2026-11-03", createdAt:now, updatedAt:now,
         titles:[], estateContacts:[], titleDetails:[],
         stepNotes:{}, stepActuals:{},
+        estateCategory:"to-call",
+        todoCategory:"call",
       },
       {
         id:"itm_harvest", name:"Harvest Festival Campaign", owner:"R. Boyd",
         currentPhase:"Media Buy Setup", status:"", summary:"Fall retail campaign, three markets.",
-        notes:"", target_found_contact:"2026-06-15", target_contacted_estate:"2026-07-10",
+        notes:"", target_call:"2026-06-15", target_pitch:"2026-07-10", target_proposal:"2026-08-20",
         target_rights_secured:"2026-09-02", createdAt:now, updatedAt:now,
         titles:[], estateContacts:[], titleDetails:[],
-        stepNotes:{ target_found_contact:"Talent's agent is our point of contact, not the estate directly." },
-        stepActuals:{ target_found_contact:"2026-06-18" },
+        stepNotes:{ target_call:"Talent's agent is our point of contact, not the estate directly." },
+        stepActuals:{ target_call:"2026-06-18" },
         todo:{ stepRef:"", text:"Confirm replacement spokesperson", priority:false, assignee:"R. Boyd" },
+        estateCategory:"hold",
+        todoCategory:"pitch",
       },
     ],
     baselines: [
-      // Lansdowne: outreach ran long; the accepted knock-on shifted the negotiation window,
+      // Lansdowne: outreach ran long; the accepted knock-on shifted the pitch window,
       // and that shift was acknowledged as a delay (ghost bar + badge visible).
-      {id:"bl1", itemId:"itm_lansdowne", entity:"item", entityId:"itm_lansdowne", field:"target_contacted_estate", baselineDate:"2026-07-01", generation:2, acknowledged:true, setAt:now, setBy:"knock-on", note:"Shifted 21d after outreach took longer than expected."},
+      {id:"bl1", itemId:"itm_lansdowne", entity:"item", entityId:"itm_lansdowne", field:"target_pitch", baselineDate:"2026-07-01", generation:2, acknowledged:true, setAt:now, setBy:"knock-on", note:"Shifted 21d after outreach took longer than expected."},
       // Rights Secured target also moved, but nobody has confirmed why yet — stays SILENT
       // on purpose (rule 3.2). This is what makes it worth clicking into the item.
       {id:"bl2", itemId:"itm_lansdowne", entity:"item", entityId:"itm_lansdowne", field:"target_rights_secured", baselineDate:"2026-11-20", generation:2, acknowledged:false, setAt:now, setBy:"system", note:""},
@@ -1005,6 +1008,54 @@ function recordChange(itemId, entity, entityId, label, field, fieldLabel, oldVal
     newValue: newValue == null ? "" : String(newValue),
     changedBy: "You", changedAt: new Date().toISOString(), note: note || "",
   });
+}
+
+/* ---- Estates page: To Call / In the Works / Hold for Now ------------- */
+const ESTATE_CATEGORIES = [
+  ["to-call", "To Call"],
+  ["in-the-works", "In the Works"],
+  ["tracking-info", "Tracking Down Info"],
+  ["hold", "Hold for Now"],
+];
+function estateCategoryLabel(key){
+  const entry = ESTATE_CATEGORIES.find(c => c[0] === key);
+  return entry ? entry[1] : key;
+}
+function migrateEstateCategory(item){
+  if(!ESTATE_CATEGORIES.some(c => c[0] === item.estateCategory)) item.estateCategory = "in-the-works";
+}
+function updateEstateCategory(item, value){
+  migrateEstateCategory(item);
+  const old = item.estateCategory;
+  if(old === value) return;
+  item.estateCategory = value;
+  recordChange(item.id, "item", item.id, item.name, "estateCategory", "Category", estateCategoryLabel(old), estateCategoryLabel(value));
+  scheduleSave();
+  render();
+}
+
+/* ---- To-Do page: To Call / To Email / Other -------------------------- */
+const TODO_CATEGORIES = [
+  ["call", "Call"],
+  ["pitch", "Make the Pitch"],
+  ["proposal", "Make the Proposal"],
+  ["secure", "Secure Rights"],
+];
+function todoCategoryLabel(key){
+  const entry = TODO_CATEGORIES.find(c => c[0] === key);
+  return entry ? entry[1] : key;
+}
+function migrateTodoCategory(item){
+  if(!TODO_CATEGORIES.some(c => c[0] === item.todoCategory)) item.todoCategory = "call";
+}
+function updateTodoCategory(item, value){
+  migrateTodoCategory(item);
+  const old = item.todoCategory;
+  if(old === value) return;
+  item.todoCategory = value;
+  recordChange(item.id, "item", item.id, item.name, "todoCategory", "To-Do Category", todoCategoryLabel(old), todoCategoryLabel(value));
+  scheduleSave();
+  render();
 }
 
 /* ---- Revert (Changes tab) --------------------------------------------
@@ -1345,7 +1396,7 @@ function renderOverviewBody(){
   wrap.appendChild(el(`
     <div class="page-head">
       <div>
-        <h1 class="page-title">Rights Overview</h1>
+        <h1 class="page-title">Estates</h1>
       </div>
       <div class="page-head-actions">
         <button class="btn" id="upload-schedule-btn">Upload schedule</button>
@@ -1388,7 +1439,8 @@ function renderTodoTab(){
   wrap.appendChild(renderTodoPanel(STATE.data.items));
   return wrap;
 }
-/** Read-only per-estate rundown: what's done, every note (dated), and what's next. */
+/** Read-only per-estate rundown: what's done, every note (dated), and what's next.
+ * Organized into the same four category windows as the Estates page. */
 function renderSummaryTab(){
   const wrap = el(`<div></div>`);
   wrap.appendChild(el(`
@@ -1398,15 +1450,34 @@ function renderSummaryTab(){
       </div>
     </div>
   `));
-  const list = el(`<div class="summary-list"></div>`);
-  const items = [...STATE.data.items].sort((a, b) => a.name.localeCompare(b.name));
+  const items = STATE.data.items;
+  for(const item of items) migrateEstateCategory(item);
   if(!items.length){
-    list.appendChild(el(`<div class="section-note">No estates yet.</div>`));
-  }else{
-    for(const item of items) list.appendChild(renderSummaryBox(item));
+    wrap.appendChild(el(`<div class="section-note">No estates yet.</div>`));
+    return wrap;
+  }
+  const list = el(`<div class="estate-categories"></div>`);
+  for(const [key, label] of ESTATE_CATEGORIES){
+    const group = items.filter(i => i.estateCategory === key).sort((a, b) => a.name.localeCompare(b.name));
+    list.appendChild(renderSummaryCategoryPanel(key, label, group));
   }
   wrap.appendChild(list);
   return wrap;
+}
+function renderSummaryCategoryPanel(key, label, items){
+  const panel = el(`
+    <div class="panel">
+      <div class="panel-head"><div><h2>${escapeHtml(label)}</h2></div></div>
+      <div class="panel-pad" data-role="list"></div>
+    </div>
+  `);
+  const list = panel.querySelector('[data-role="list"]');
+  if(!items.length){
+    list.appendChild(el(`<div class="section-note">Nothing here.</div>`));
+  }else{
+    for(const item of items) list.appendChild(renderSummaryBox(item));
+  }
+  return panel;
 }
 function renderSummaryBox(item){
   const seq = buildStepSequence(item);
@@ -1505,59 +1576,67 @@ function renderTodoPanel(items){
     return aT < bT ? -1 : aT > bT ? 1 : 0;
   });
 
-  const panel = el(`
-    <div class="panel">
-      <div class="panel-head"><div><h2>To-Do</h2></div></div>
-      <div class="panel-pad" id="todo-list"></div>
-    </div>
-  `);
-  const list = panel.querySelector("#todo-list");
+  const wrap = el(`<div class="estate-categories"></div>`);
   if(!rows.length && !completeItems.length){
-    list.appendChild(el(`<div class="section-note">Nothing outstanding yet.</div>`));
-    return panel;
+    wrap.appendChild(el(`
+      <div class="panel">
+        <div class="panel-head"><div><h2>To-Do</h2></div></div>
+        <div class="panel-pad"><div class="section-note">Nothing outstanding yet.</div></div>
+      </div>
+    `));
+    return wrap;
   }
 
-  if(!activeRows.length && !pendingRows.length){
-    list.appendChild(el(`<div class="section-note">Nothing outstanding — everything else has wrapped up below.</div>`));
-  }
-
-  // Group by assignee, "Unassigned" last, everyone else alphabetically.
+  // Group by To-Do category (fixed order: Call, Make the Pitch, Make the
+  // Proposal, Secure Rights) — assigned via the toggle on each item's own
+  // detail page, not from here. Each category gets its own window, same
+  // format as the Estates page.
   const groups = new Map();
   for(const r of activeRows){
-    const person = r.next.assignee.trim() || "Unassigned";
-    if(!groups.has(person)) groups.set(person, []);
-    groups.get(person).push(r);
+    migrateTodoCategory(r.item);
+    const cat = r.item.todoCategory;
+    if(!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(r);
   }
-  const people = [...groups.keys()].sort((a, b) => {
-    if(a === "Unassigned") return 1;
-    if(b === "Unassigned") return -1;
-    return a.localeCompare(b);
-  });
-
-  for(const person of people){
-    list.appendChild(el(`<div class="todo-group-label">${escapeHtml(person)}</div>`));
-    for(const { item, next } of sortRows(groups.get(person))){
-      list.appendChild(renderTodoRow(item, next, today, false));
-    }
+  for(const [key, label] of TODO_CATEGORIES){
+    const group = sortRows(groups.get(key) || []);
+    wrap.appendChild(renderTodoCategoryPanel(label, group, today, false));
   }
 
   if(pendingRows.length){
-    list.appendChild(el(`<div class="todo-group-label todo-group-label-pending">Pending — Awaiting Response</div>`));
     pendingRows.sort((a, b) => (b.next.pendingDays || 0) - (a.next.pendingDays || 0));
-    for(const { item, next } of pendingRows){
-      list.appendChild(renderTodoRow(item, next, today, true));
-    }
+    wrap.appendChild(renderTodoCategoryPanel("Pending — Awaiting Response", pendingRows, today, true));
   }
 
   if(completeItems.length){
-    list.appendChild(el(`<div class="todo-group-label todo-group-label-complete">Complete — Rights Secured</div>`));
     completeItems.sort((a, b) => {
       const aD = a.stepActuals.target_rights_secured, bD = b.stepActuals.target_rights_secured;
       return aD < bD ? 1 : aD > bD ? -1 : 0; // most recently secured first
     });
-    for(const item of completeItems){
-      list.appendChild(renderTodoCompleteRow(item));
-    }
+    const panel = el(`
+      <div class="panel">
+        <div class="panel-head"><div><h2>Complete — Rights Secured</h2></div></div>
+        <div class="panel-pad" data-role="list"></div>
+      </div>
+    `);
+    const list = panel.querySelector('[data-role="list"]');
+    for(const item of completeItems) list.appendChild(renderTodoCompleteRow(item));
+    wrap.appendChild(panel);
+  }
+  return wrap;
+}
+function renderTodoCategoryPanel(label, rows, today, isPendingRow){
+  const panel = el(`
+    <div class="panel">
+      <div class="panel-head"><div><h2>${escapeHtml(label)}</h2></div></div>
+      <div class="panel-pad" data-role="list"></div>
+    </div>
+  `);
+  const list = panel.querySelector('[data-role="list"]');
+  if(!rows.length){
+    list.appendChild(el(`<div class="section-note">Nothing here.</div>`));
+  }else{
+    for(const { item, next } of rows) list.appendChild(renderTodoRow(item, next, today, isPendingRow));
   }
   return panel;
 }
@@ -1740,16 +1819,25 @@ function buildSlateTimeline(items){
 }
 
 function renderProductionPulse(){
+  const wrap = el(`<div class="estate-categories"></div>`);
+  const items = filteredItems();
+  for(const item of items) migrateEstateCategory(item);
+  for(const [key, label] of ESTATE_CATEGORIES){
+    const group = items.filter(i => i.estateCategory === key);
+    wrap.appendChild(renderEstateCategoryPanel(key, label, group));
+  }
+  return wrap;
+}
+function renderEstateCategoryPanel(key, label, items){
   const panel = el(`
     <div class="panel">
-      <div class="panel-head"><div><span class="eyebrow">Current stage by project</span><h2>Estates</h2></div></div>
-      <div class="panel-pad" id="pulse-list"></div>
+      <div class="panel-head"><div><h2>${escapeHtml(label)}</h2></div></div>
+      <div class="panel-pad" data-role="list"></div>
     </div>
   `);
-  const list = panel.querySelector("#pulse-list");
-  const items = filteredItems();
+  const list = panel.querySelector('[data-role="list"]');
   if(!items.length){
-    list.appendChild(el(`<div class="section-note">No items match.</div>`));
+    list.appendChild(el(`<div class="section-note">Nothing here.</div>`));
   }
   for(const item of items){
     const health = itemHealth(STATE.data, item);
@@ -1868,8 +1956,9 @@ function buildTimelineViz(item, bars, tall){
   return wrap;
 }
 const ITEM_BASELINE_FIELD_BY_BAR = {
-  "step-1-2": "target_found_contact",
-  "step-2-3": "target_contacted_estate",
+  "step-1-2": "target_call",
+  "step-2-3": "target_pitch",
+  "step-3-4": "target_proposal",
   "rights-secured": "target_rights_secured",
 };
 
@@ -1907,11 +1996,21 @@ function renderItemDetail(itemId){
           <option value="yellow" ${item.status==="yellow"?"selected":""}>Override: Yellow</option>
           <option value="red" ${item.status==="red"?"selected":""}>Override: Red</option>
         </select>
+        <select class="phase-status-select" id="f-estate-category" style="margin-top:4px;">
+          ${ESTATE_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.estateCategory === k ? "selected" : ""}>${escapeHtml(l)}</option>`).join("")}
+        </select>
+        <select class="phase-status-select" id="f-todo-category" style="margin-top:4px;">
+          ${TODO_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.todoCategory === k ? "selected" : ""}>To-Do: ${escapeHtml(l)}</option>`).join("")}
+        </select>
       </div>
     </div>
   `);
   bindCommit(head.querySelector("#f-name"), v => updateItemField(item, "name", v));
   head.querySelector("#f-status-override").onchange = (e) => updateItemField(item, "status", e.target.value);
+  migrateEstateCategory(item);
+  head.querySelector("#f-estate-category").onchange = (e) => updateEstateCategory(item, e.target.value);
+  migrateTodoCategory(item);
+  head.querySelector("#f-todo-category").onchange = (e) => updateTodoCategory(item, e.target.value);
   head.querySelector("#titles-row").appendChild(renderTitlesSection(item));
   head.querySelector("#estate-contact-row").appendChild(renderEstateContactSection(item));
   wrap.appendChild(head);
@@ -2866,10 +2965,10 @@ function renderNewItemModal(){
     if(!name) return;
     const now = new Date().toISOString();
     const item = {
-      id: uid("itm"), name, owner: "", currentPhase: "Found Estate Contact", status: "",
+      id: uid("itm"), name, owner: "", currentPhase: "Call", status: "",
       summary: "", notes: "",
-      target_found_contact:"", target_contacted_estate:"",
-      target_rights_secured:"", stepNotes:{}, stepActuals:{}, customSteps:[], removedPresetSteps:[], stepPending:{}, stepLabelOverrides:{}, todo:{stepRef:"",text:"",priority:false,assignee:""}, titles:[], estateContacts:[],
+      target_call:"", target_pitch:"", target_proposal:"",
+      target_rights_secured:"", stepNotes:{}, stepActuals:{}, customSteps:[], removedPresetSteps:[], stepPending:{}, stepLabelOverrides:{}, estateCategory:"in-the-works", todoCategory:"call", todo:{stepRef:"",text:"",priority:false,assignee:""}, titles:[], estateContacts:[],
       titleDetails:[], createdAt: now, updatedAt: now,
     };
     STATE.data.items.push(item);
