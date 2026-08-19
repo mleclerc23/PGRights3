@@ -412,6 +412,7 @@
   .decision-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 
   .phase-status-select{ background: var(--panel-alt); border:1.5px solid var(--border); border-radius:8px; color:var(--text); padding:5px 8px; font-size:12px;}
+  .phase-status-select:disabled{ opacity:0.7; cursor:not-allowed; }
 
   .change-row{ display:flex; align-items:flex-start; gap:10px; padding: 9px 0; border-bottom:1px solid var(--border-soft); font-size:12.5px; }
   .change-row:last-child{ border-bottom:none; }
@@ -818,7 +819,7 @@ function computeNextStep(item){
   if(item.estateCategory === "hold" && isValidDate(item.holdFollowUpDate)){
     return {
       ref: "__hold_followup__",
-      label: "Follow Up",
+      label: item.holdFollowUpLabel || "Follow-Up",
       target: item.holdFollowUpDate,
       text: "",
       priority: Boolean(item.todo.priority),
@@ -1096,6 +1097,16 @@ function updateHoldFollowUpDate(item, value){
   if(old === value) return;
   item.holdFollowUpDate = value;
   recordChange(item.id, "item", item.id, item.name, "holdFollowUpDate", "Follow-up date", old, value);
+  scheduleSave();
+  render();
+}
+function updateHoldFollowUpLabel(item, value){
+  const trimmed = (value || "").trim();
+  const old = item.holdFollowUpLabel || "Follow-Up";
+  const next = trimmed || "Follow-Up";
+  if(old === next) return;
+  item.holdFollowUpLabel = next;
+  recordChange(item.id, "item", item.id, item.name, "holdFollowUpLabel", "Follow-Up step name", old, next);
   scheduleSave();
   render();
 }
@@ -2067,8 +2078,10 @@ function renderItemDetail(itemId){
         <select class="phase-status-select" id="f-estate-category" style="margin-top:4px;">
           ${ESTATE_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.estateCategory === k ? "selected" : ""}>${escapeHtml(l)}</option>`).join("")}
         </select>
-        <select class="phase-status-select" id="f-todo-category" style="margin-top:4px;">
-          ${TODO_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.todoCategory === k ? "selected" : ""}>To-Do: ${escapeHtml(l)}</option>`).join("")}
+        <select class="phase-status-select" id="f-todo-category" style="margin-top:4px;" ${item.estateCategory === "hold" ? "disabled title=\"Automatic while on Hold for Now\"" : ""}>
+          ${item.estateCategory === "hold"
+            ? `<option value="" selected>To-Do: Follow Up</option>`
+            : TODO_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.todoCategory === k ? "selected" : ""}>To-Do: ${escapeHtml(l)}</option>`).join("")}
         </select>
         ${item.estateCategory === "hold" ? `
         <div class="hold-followup-field" style="margin-top:4px;">
@@ -2404,6 +2417,70 @@ function renderStepsPanel(item){
   const list = panel.querySelector("#ms-list");
   const seq = buildStepSequence(item);
 
+  if(item.estateCategory === "hold"){
+    migrateHoldFollowUpNotes(item);
+    const followUpNotes = item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY];
+    const followUpLabel = item.holdFollowUpLabel || "Follow-Up";
+    const followUpBlock = el(`
+      <div class="step-block">
+        <div class="kv-row kv-row-flush">
+          <div class="kv-left" data-role="followup-label-holder"></div>
+          <div class="kv-right">
+            <div class="date-pair">
+              <div class="date-pair-item">
+                <span class="date-pair-label">Target</span>
+                <input type="date" class="date-input" id="f-followup-target" value="${item.holdFollowUpDate && isValidDate(item.holdFollowUpDate) ? item.holdFollowUpDate : ""}" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-notes-list" data-notes-list></div>
+        <div class="step-note-add">
+          <input type="date" class="step-note-date-input" data-role="add-note-date" />
+          <input type="text" class="step-note-input" placeholder="Add a note…" data-role="add-note" />
+        </div>
+      </div>
+    `);
+    const followUpLabelInput = el(`<input class="td-title-input" value="${escapeHtml(followUpLabel)}" placeholder="Step name" />`);
+    followUpBlock.querySelector('[data-role="followup-label-holder"]').appendChild(followUpLabelInput);
+    bindCommit(followUpLabelInput, v => updateHoldFollowUpLabel(item, v));
+    const followUpInput = followUpBlock.querySelector("#f-followup-target");
+    wrapDateField(followUpInput, item.holdFollowUpDate);
+    followUpInput.onchange = (e) => { if(e.target.value) updateHoldFollowUpDate(item, e.target.value); };
+
+    const followUpNotesList = followUpBlock.querySelector("[data-notes-list]");
+    followUpNotes.forEach((n, nIdx) => {
+      const row = el(`
+        <div class="step-note-line adaptation-row">
+          <input type="date" class="step-note-date-input" value="${n.date && isValidDate(n.date) ? n.date : ""}" data-role="note-date" />
+          <div class="adaptation-rich" data-holder="note-rich"></div>
+          <button class="ec-remove" title="Remove note" data-role="remove-note">×</button>
+        </div>
+      `);
+      const noteDateInput = row.querySelector('[data-role="note-date"]');
+      wrapDateField(noteDateInput, n.date);
+      noteDateInput.onchange = (e) => updateFollowUpNoteDate(item, nIdx, e.target.value || null);
+      const noteEditor = createRichTextEditor(n.text || "", "", 20);
+      row.querySelector('[data-holder="note-rich"]').appendChild(noteEditor.wrap);
+      bindCommitRich(noteEditor.editable, v => updateFollowUpNoteText(item, nIdx, v));
+      row.querySelector('[data-role="remove-note"]').onclick = () => removeFollowUpNote(item, nIdx);
+      followUpNotesList.appendChild(row);
+    });
+    const followUpAddDateInput = followUpBlock.querySelector('[data-role="add-note-date"]');
+    wrapDateField(followUpAddDateInput, "");
+    const followUpAddInput = followUpBlock.querySelector('[data-role="add-note"]');
+    let followUpNoteSubmitted = false;
+    const submitFollowUpNote = () => {
+      if(followUpNoteSubmitted) return;
+      followUpNoteSubmitted = true;
+      addFollowUpNote(item, followUpAddInput.value, followUpAddDateInput.value || null);
+    };
+    followUpAddInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); submitFollowUpNote(); } });
+    followUpAddInput.addEventListener("blur", () => { if(followUpAddInput.value.trim()) submitFollowUpNote(); });
+
+    list.appendChild(followUpBlock);
+  }
+
   list.appendChild(renderStepInsertRow(item, null, seq.length ? seq[0].order : 0));
 
   seq.forEach((entry, idx) => {
@@ -2606,6 +2683,51 @@ function renderStepBlock(opts){
   return block;
 }
 
+const HOLD_FOLLOWUP_NOTE_KEY = "__hold_followup__";
+function migrateHoldFollowUpNotes(item){
+  if(!item.stepNotes) item.stepNotes = {};
+  if(!Array.isArray(item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY])) item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY] = [];
+}
+function addFollowUpNote(item, text, date){
+  const value = (text || "").trim();
+  if(!value) return;
+  migrateHoldFollowUpNotes(item);
+  item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY].push({ id: uid("sn"), text: escapeHtml(value), date: date || null, createdAt: new Date().toISOString() });
+  recordChange(item.id, "item", item.id, item.name, "followUpNote", "Follow-Up note added", "", value);
+  scheduleSave();
+  render();
+}
+function removeFollowUpNote(item, idx){
+  migrateHoldFollowUpNotes(item);
+  const removed = item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY][idx];
+  item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY].splice(idx, 1);
+  recordChange(item.id, "item", item.id, item.name, "followUpNote", "Follow-Up note removed", (removed && removed.text) || "", "");
+  scheduleSave();
+  render();
+}
+function updateFollowUpNoteText(item, idx, value){
+  migrateHoldFollowUpNotes(item);
+  const note = item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY][idx];
+  if(!note) return;
+  const old = note.text || "";
+  if(old === value) return;
+  note.text = value;
+  recordChange(item.id, "item", item.id, item.name, "followUpNoteText", "Follow-Up note", old, value);
+  scheduleSave();
+  render();
+}
+function updateFollowUpNoteDate(item, idx, value){
+  migrateHoldFollowUpNotes(item);
+  const note = item.stepNotes[HOLD_FOLLOWUP_NOTE_KEY][idx];
+  if(!note) return;
+  const old = note.date || "";
+  const next = value || "";
+  if(old === next) return;
+  note.date = next || null;
+  recordChange(item.id, "item", item.id, item.name, "followUpNoteDate", "Follow-Up note date", old, next);
+  scheduleSave();
+  render();
+}
 function addStepNote(item, field, label, text, date){
   const value = text.trim();
   if(!value) return;
