@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Playground — Phase Tracker</title>
+<title>Playground — Rights Tracker</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAGrElEQVR4nO1bXWxcRxX+zpl7d9e73l2v49axQ1qK4zYpduOkaqyWlASpiB9FQqr4kVqIIhIBkSqQaPnngQdeeEQVkhFqUIkoUQS0kAhaqErTqgWnQiVJHSdSE4W6TkLqxvb+eXfvvefwYK/lxLtrp7k363X8PXl3Zud+33fPzJwZzwAruLlBi6k0uHq9Bk0kCPRfPLWgvpoVGlX41ahlBFcrWC7igdpaKhqwnMSXUU3TPAOWo/gyKmmjhSqUseXCcBCcAsPRjg1Vy+aOCVXHgLloNPHA4jnPGlDt7Tei+DKqcZ+rtWYENLL4MhbSsKgusJyxYkC9CdQblt8NqoiI4zrlz0QgDoVCV1QSETBfab6qgogAYGrwjePem8fGuTVl7P77brdvv23t3HI/4bsBmef/dpR++rM1HlueqBIZUk0kcnzHhydCD/SLteMzfaF4PK4iQmUTZgwpvjs6WnriB5fkn//qSxKTqCIbi6XzOx95Ofn9J7ZXNO464bsBMpl2k6Pn1+ZVESKCAcDEwFsnIX8+jMyTAyMy8PN3I/f0boCIgIhARF42l83s3F1oO3tu06QCY/f0vIWxsZbE6IUPhQae2p4OhV5OfPub2/3m6/8YYFmUAQkzi7Pzy6/QHw+cSP/wO0fGuz7ydlYVsdHRtdk9e5NuOpMGEannuSCi3P5n/t125lxXGir0vcePtB36fU/yL89G8309Qy6TVxz41ZbCf98Z8Zuu/waoKkQ4JMrc3QW6d1Nv4mtf3db87IFb3Z6PDk8Rey0X3+ucevGlE6DpTq2q6jz/wiowi9N+y8XYN/ZshYjYqVSr/djenOu6prlQjJZe+PtZv+kGNgsoABQKCs/zNJfP2Yl4IrLzkfdDIkaZFCeHXQCAZdkyOTmBs+c6IcJy513njTEGqgJVtbu72zOWVbSZtTR82vjNM9hpkBkwxsAyBqpqh8OkAEiVVGS2mpYcB65rA0CoNVUEpqMCRKSpZFKSyUlSJfPOSNx3in43WBVEJHNEX10GsAIAMV+xJiFjDDEpABjXabAIuAofdBonw6LGeGos3/cqlnwmqKqqmXzMUjXI5cJ+t+97HuA32LKMdf+WIWd8osnc1T0B4E4/21+yBhCm+4sdjcZa9w1sAQA7gOcs+S4AoJxbCFR9HwNubARcC/+y6Ku/83lBdOMMEBE1M/MZkbJZYEazrSAifh6CNUAV8DyPPPEQZs4PDTtRAJ4oafe6ig6oCAGAXBq7xPnclBARVBWqinA4xJ0dnX5SDMwAAkDhMMEYg2hTbOo/x07imYN9rmGvYFvF+NYHuir+Tqa7Se7JX5yK/+Z3Hx+HCBFrRJW9TRuH4s8dXPoGEAAXgHvmjNLgG8fzR1697D392z4rk03EmMjZvetoqLNju7quQ1aVUA+FVCKRKcATLZSaWJVcrZJJXgcCMcAQkCWIvW//Nvr1frQQQ6DwCBj/3I7Xko9/ayumN0TmdwPLKABEH9vbq1/fk27KpPPZzz/abI1PtBUpgNW77y3OgULhKHA5Fb9s7r77nP3ol4qpHZ/92PRKp/a/prkl2UJEbCfiBTJmglR93w4DAjLAU6AZYGfXV16JfvHhW7y2tpTdsXozgNmpjMp/V4PrurAsW0ulkgYkHgjIAJ1pWLvXgXt7NjCA2UTGLDT/zWBmqyyIjdC5CKwLKAAtFFQ9zyNRuVHz+rUi0FSYmEHGmKDf4vWgMdYCAWLFgHoTqDcaygAKIBNc8gbonFxBjeW7A0vCAGJmpemVspNO2wBARKSqisl0mjKZZgAodXZk/X52fQ2YWepyS7IFazr/ByKV02+3AwBElYhIRkbHooVizFEgsq6r5DeF+keAJx4ZY+xPPHgBKhQaGbkt86dDr5cTp8K+p4sRY3kZhhv61ENr/H68/5kgESmzKBGwiPxHmZhUNbp71/r3Dxy8vGoy2zr23R9t1EN/HXTeuxSz3zzeb9jA+sLDr4Y3rH/Qb7q+R4A6jsQUbCsYjrtgfWJmqKrdfmt77KlfjmY62s+3FoqxxIv/6F91bKjHBjD+0LbBxE9+vHneHqEP8D0CrNXtTbnNG0+EAaI1HdMnQxZKhZkZIhK5795ePvyHseJzh49MnTrNViwm9v39kdSnP9kPoPbq8QNillilc4LL4ZgcUPnUaPm0aP0HwTpjxYB6E6g3VgyoVVjryHmjYCENswZUu1fTyCZU437N9wUa0YTFcp731pfzlRlgfqTPi4DF3LVrVFTSVrELLEcTqmmqOgYsJxNqabnpr86u4GbH/wF1o9kkzPqy4wAAAABJRU5ErkJggg==" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -48,6 +49,7 @@
     font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    zoom: 1.14;
   }
   ::selection{ background: var(--gold); color: var(--ink); }
   a{ color: inherit; }
@@ -250,13 +252,23 @@
   .titles-row{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
   .title-tag{
     display:inline-flex; align-items:center; gap:6px; background: var(--panel-alt); border:1.5px solid var(--border);
-    border-radius:100px; padding:4px 6px 4px 12px; font-size:12px; font-weight:500; color: var(--text-dim);
+    border-radius:100px; padding:4px 6px; font-size:12px; font-weight:500; color: var(--text-dim);
   }
   .title-tag button{ background:none; border:none; color: var(--text-faint); cursor:pointer; font-size:14px; line-height:1; padding:2px 6px; border-radius:50%; }
   .title-tag button:hover{ background: var(--red-bg); color: var(--red); }
   .title-tag-add{ background:transparent; border-style:dashed; padding:4px 10px; }
   .title-tag-add input{ border:none; background:transparent; outline:none; color:var(--text); font-size:12px; width:100px; }
   .title-tag-add input::placeholder{ color: var(--text-faint); }
+  .title-tag-star{ background:none; border:none; color: var(--text-faint); cursor:pointer; font-size:12px; line-height:1; padding:0 0 0 4px; flex-shrink:0; }
+  .title-tag-star:hover{ color: var(--gold); }
+  .title-tag-star.active{ color: var(--gold); }
+  .title-tag-priority{ border-color: var(--gold); background: #4FA8E01a; }
+  .title-tags-toggle{
+    display:block; background:none; border:none; color: var(--text-faint); cursor:pointer; font-size:10.5px; font-family: var(--font-mono);
+    text-decoration:underline; padding:0; margin:8px 0 6px;
+  }
+  .title-tags-toggle:hover{ color: var(--text-dim); }
+  .writer-imdb-field{ margin:14px 0; }
   .estate-contact-row{ margin-bottom:14px; }
   .estate-contact-row .field-label{ margin:0 0 6px; }
   .ec-contacts-row{ display:flex; flex-wrap:wrap; gap:0; }
@@ -900,86 +912,144 @@ const API_URL = "/api/data";
 const API_HEADERS = { "Content-Type": "application/json", "x-app-password": ACCESS_PASSWORD };
 let saveTimer = null;
 
-function seedData(){
+/** The 22 estates recovered from playgroundrights.com via screenshots, after
+ * the artifact's own copy was lost to the loadData storage bug. Only name,
+ * titles, and category were visible in those screenshots, so that's all
+ * that's here — step dates, notes, and estate contacts weren't recoverable
+ * this way. Shared by seedData() (the fresh-storage fallback) and the
+ * one-time forced restore in loadData() below (for when storage already
+ * has the old placeholder data sitting in it, which otherwise takes
+ * priority over any fallback and never lets seedData() run at all). */
+function buildRecoveredEstatesData(){
   const now = new Date().toISOString();
+  const RAW_ESTATES = [
+    ["Leon Griffith Estate", ["Minder"], "to-call"],
+    ["Trevor Preston Estate", ["Out"], "to-call"],
+    ["Brian Clemens Estate", ["The Professionals"], "in-the-works"],
+    ["Brian Degas Estate", ["Colditz"], "in-the-works"],
+    ["Clive Exton Estate", ["Conceptions of Murder", "Killers", "The Crezz"], "in-the-works"],
+    ["Ian Kennedy Martin Estate", ["The Sweeney", "Juliet Bravo", "The Chinese Detective"], "in-the-works"],
+    ["Jean Marsh Estate", ["Upstairs, Downstairs"], "in-the-works"],
+    ["Michael J. Bird Estate", ["The Lotus Eaters"], "in-the-works"],
+    ["Robin Chapman Estate", ["Spindoe"], "in-the-works"],
+    ["Troy Kennedy Martin Estate", ["Z-Cars", "Softly, Softly", "Softly, Softly: Task Force"], "in-the-works"],
+    ["Colin Dexter Estate", ["Inspector Morse"], "tracking-info"],
+    ["Gerard Glaister Estate", ["Colditz", "The Expert", "Howard's Way"], "tracking-info"],
+    ["Jack Gerson Estate", ["The Omega Factor"], "tracking-info"],
+    ["James Mitchell Estate", ["Callan"], "tracking-info"],
+    ["Robert Banks Stewart Estate", ["Call Me Mister"], "tracking-info"],
+    ["Terry Nation Estate", ["Blake's 7"], "tracking-info"],
+    ["Alan Plater Estate", ["A Very British Coup"], "hold"],
+    ["Dennis Spooner Estate", ["Man in a Suitcase", "Randall and Hopkirk (Deceased)"], "hold"],
+    ["John Mortimer Estate", ["Rumpole of the Bailey"], "hold"],
+    ["Nigel Kneale Estate", ["The Quatermass Experiment", "Quatermass", "The Year of the Sex Olympics"], "hold"],
+    ["Ron Hutchinson (Living)", ["Bird of Prey"], "hold"],
+    ["Ted Willis Estate", ["Dixon of Dock Green"], "hold"],
+  ];
+  const items = RAW_ESTATES.map(([name, titles, estateCategory], idx) => ({
+    id: "itm_recovered_" + idx,
+    name, owner: "", currentPhase: "Call", status: "",
+    summary: "", notes: "",
+    target_call: "", target_pitch: "", target_proposal: "", target_rights_secured: "",
+    createdAt: now, updatedAt: now,
+    titles, estateContacts: [], titleDetails: [],
+    stepNotes: {}, stepActuals: {}, customSteps: [], removedPresetSteps: [],
+    stepPending: {}, stepLabelOverrides: {},
+    todo: { stepRef:"", text:"", priority:false, assignee:"" },
+    estateCategory, todoCategory: "call",
+  }));
   return {
-    items: [
-      {
-        id:"itm_lansdowne", name:"The Lansdowne Estate", owner:"M. Alvarez",
-        currentPhase:"Securing Rights", status:"", summary:"Full-catalog rights to the Marlowe Quartet novels.",
-        notes:"Co-agent's exclusivity window is the critical path; see flag.",
-        target_call:"2026-05-15", target_pitch:"2026-07-22", target_proposal:"2026-10-01",
-        target_rights_secured:"2026-12-15", createdAt:now, updatedAt:now,
-        titles:["The Marlowe Quartet: Book One", "The Marlowe Quartet: Book Two"],
-        estateContacts:[{ id:"ec1", name:"Priya Shah", company:"Lansdowne Estate Trust", phone:"(415) 555-0142", email:"priya@lansdowneestate.example", notes:"" }],
-        titleDetails:[
-          { id:"td1", title:"The Marlowe Quartet: Book One", logline:"A disgraced barrister returns to her family's coastal estate and uncovers a decades-old conspiracy.", genre:"Mystery, Drama", originalOrAdapted:"Adapted", episodeCount:"8", basedOn:"The Marlowe Quartet (novel), by Eleanor Voss", originalRun:"1998–2003 (novel series)", broadcaster:"", adaptations:[{ id:"ad1", text:"TV series (in negotiation)" }, { id:"ad2", text:"Stage rights reserved by the estate" }], notes:"Estate has asked that any pitch materials avoid naming the real-life case the novel was loosely based on." },
-        ],
-        stepNotes:{
-          target_pitch:[{ id:"sn1", text:"Estate counsel needed extra time to consult the heirs — pushed this 21 days.", date:"2026-06-20", createdAt:now }],
-          target_rights_secured:[{ id:"sn2", text:"Estate counsel wants the co-agent question settled before final terms.", date:"2026-07-25", createdAt:now }],
-        },
-        stepActuals:{
-          target_call:"2026-05-15",
-          target_pitch:"2026-07-27",
-        },
-        todo:{ stepRef:"", text:"", priority:true, assignee:"M. Alvarez" },
-        estateCategory:"in-the-works",
-        todoCategory:"proposal",
-      },
-      {
-        id:"itm_northwind", name:"Northwind Billing v2", owner:"J. Park",
-        currentPhase:"Build", status:"", summary:"Rewrite of usage-based billing engine.",
-        notes:"", target_call:"2026-05-10", target_pitch:"2026-06-01", target_proposal:"2026-08-15",
-        target_rights_secured:"2026-11-03", createdAt:now, updatedAt:now,
-        titles:[], estateContacts:[], titleDetails:[],
-        stepNotes:{}, stepActuals:{},
-        estateCategory:"to-call",
-        todoCategory:"call",
-      },
-      {
-        id:"itm_harvest", name:"Harvest Festival Campaign", owner:"R. Boyd",
-        currentPhase:"Media Buy Setup", status:"", summary:"Fall retail campaign, three markets.",
-        notes:"", target_call:"2026-06-15", target_pitch:"2026-07-10", target_proposal:"2026-08-20",
-        target_rights_secured:"2026-09-02", createdAt:now, updatedAt:now,
-        titles:[], estateContacts:[], titleDetails:[],
-        stepNotes:{ target_call:"Talent's agent is our point of contact, not the estate directly." },
-        stepActuals:{ target_call:"2026-06-18" },
-        todo:{ stepRef:"", text:"Confirm replacement spokesperson", priority:false, assignee:"R. Boyd" },
-        estateCategory:"hold",
-        todoCategory:"pitch",
-        holdFollowUpDate:"2026-09-02",
-      },
-    ],
-    baselines: [
-      // Lansdowne: outreach ran long; the accepted knock-on shifted the pitch window,
-      // and that shift was acknowledged as a delay (ghost bar + badge visible).
-      {id:"bl1", itemId:"itm_lansdowne", entity:"item", entityId:"itm_lansdowne", field:"target_pitch", baselineDate:"2026-07-01", generation:2, acknowledged:true, setAt:now, setBy:"knock-on", note:"Shifted 21d after outreach took longer than expected."},
-      // Rights Secured target also moved, but nobody has confirmed why yet — stays SILENT
-      // on purpose (rule 3.2). This is what makes it worth clicking into the item.
-      {id:"bl2", itemId:"itm_lansdowne", entity:"item", entityId:"itm_lansdowne", field:"target_rights_secured", baselineDate:"2026-11-20", generation:2, acknowledged:false, setAt:now, setBy:"system", note:""},
-    ],
+    items,
+    baselines: [],
     changes: [],
-    flags: [
-      {id:"fl1", itemId:"itm_lansdowne", title:"Co-agent exclusivity window", detail:"A second agent claims a prior exclusivity window; may push Rights Secured.", owner:"M. Alvarez", impact:"Rights Secured", level:"red", status:"open", notes:"", createdAt:now},
-      {id:"fl2", itemId:"itm_harvest", title:"Talent availability", detail:"Lead spokesperson has a scheduling conflict week of Aug 24.", owner:"R. Boyd", impact:"Contact Estate", level:"yellow", status:"watching", notes:"", createdAt:now},
-    ],
+    flags: [],
   };
 }
+function seedData(){
+  return buildRecoveredEstatesData();
+}
 
+/** Items saved before the 3-stage → 4-stage step rename (target_found_contact/
+ * target_contacted_estate → target_call/target_pitch/target_proposal) would
+ * otherwise render with blank step data, since the old field names are no
+ * longer read anywhere. Remap them in place so nothing entered under the
+ * old model gets silently dropped. */
+function migrateLegacyStepFieldNames(data){
+  if(!data || !Array.isArray(data.items)) return;
+  for(const item of data.items){
+    const hasOld = item.target_found_contact !== undefined || item.target_contacted_estate !== undefined;
+    const hasNew = item.target_call !== undefined || item.target_pitch !== undefined;
+    if(!hasOld || hasNew) continue;
+    item.target_call = item.target_found_contact || "";
+    item.target_pitch = item.target_contacted_estate || "";
+    if(item.target_proposal === undefined) item.target_proposal = "";
+    delete item.target_found_contact;
+    delete item.target_contacted_estate;
+    if(item.stepActuals){
+      if(item.stepActuals.target_found_contact !== undefined){
+        item.stepActuals.target_call = item.stepActuals.target_found_contact;
+        delete item.stepActuals.target_found_contact;
+      }
+      if(item.stepActuals.target_contacted_estate !== undefined){
+        item.stepActuals.target_pitch = item.stepActuals.target_contacted_estate;
+        delete item.stepActuals.target_contacted_estate;
+      }
+    }
+    if(item.stepNotes){
+      if(item.stepNotes.target_found_contact !== undefined){
+        item.stepNotes.target_call = item.stepNotes.target_found_contact;
+        delete item.stepNotes.target_found_contact;
+      }
+      if(item.stepNotes.target_contacted_estate !== undefined){
+        item.stepNotes.target_pitch = item.stepNotes.target_contacted_estate;
+        delete item.stepNotes.target_contacted_estate;
+      }
+    }
+    if(item.stepPending){
+      if(item.stepPending.target_found_contact !== undefined){
+        item.stepPending.target_call = item.stepPending.target_found_contact;
+        delete item.stepPending.target_found_contact;
+      }
+      if(item.stepPending.target_contacted_estate !== undefined){
+        item.stepPending.target_pitch = item.stepPending.target_contacted_estate;
+        delete item.stepPending.target_contacted_estate;
+      }
+    }
+    if(item.stepLabelOverrides){
+      if(item.stepLabelOverrides.target_found_contact !== undefined){
+        item.stepLabelOverrides.target_call = item.stepLabelOverrides.target_found_contact;
+        delete item.stepLabelOverrides.target_found_contact;
+      }
+      if(item.stepLabelOverrides.target_contacted_estate !== undefined){
+        item.stepLabelOverrides.target_pitch = item.stepLabelOverrides.target_contacted_estate;
+        delete item.stepLabelOverrides.target_contacted_estate;
+      }
+    }
+  }
+  if(Array.isArray(data.baselines)){
+    for(const bl of data.baselines){
+      if(bl.field === "target_found_contact") bl.field = "target_call";
+      else if(bl.field === "target_contacted_estate") bl.field = "target_pitch";
+    }
+  }
+}
 async function loadData(){
   try{
     const res = await fetch(API_URL, { headers: API_HEADERS });
     if(res.ok){
       const body = await res.json();
-      if(body && body.data) return body.data;
+      if(body && body.data){
+        migrateLegacyStepFieldNames(body.data);
+        return body.data;
+      }
     }
-  }catch(e){ /* network/API not reachable yet — fall through to seed */ }
-  const seeded = seedData();
-  try{
-    await fetch(API_URL, { method: "POST", headers: API_HEADERS, body: JSON.stringify({ data: seeded }) });
-  }catch(e){}
-  return seeded;
+  }catch(e){ /* network/API not reachable yet, or a transient failure —
+    either way, DO NOT persist seed data here. A failed/empty fetch is not
+    proof the store is empty, and writing over it on a guess risks silently
+    destroying real data. Only an actual user edit (scheduleSave) should
+    ever write to storage. */
+  }
+  return seedData();
 }
 function scheduleSave(){
   setSaveStatus("Editing…");
@@ -1355,7 +1425,7 @@ function renderTopbar(){
   const bar = el(`
     <div class="topnav">
       <div class="topnav-left">
-        <div class="brand">
+        <div class="brand" id="brand-home-link" style="cursor:pointer;" title="Back to Estates">
           <div>
             <img class="brand-wordmark" src="data:image/png;base64,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" alt="Playground" />
             <div class="sub">Rights Initiative</div>
@@ -1380,6 +1450,7 @@ function renderTopbar(){
     </div>
   `);
   bar.querySelector("#new-item-btn").onclick = () => { STATE.modal = "new-item"; render(); };
+  bar.querySelector("#brand-home-link").onclick = () => { STATE.tab = "overview"; STATE.view = "overview"; render(); };
   bar.querySelector("#tab-overview").onclick = () => { STATE.tab = "overview"; STATE.view = "overview"; render(); };
   bar.querySelector("#tab-summary").onclick = () => { STATE.tab = "summary"; STATE.view = "overview"; render(); };
   bar.querySelector("#tab-timeline").onclick = () => { STATE.tab = "timeline"; STATE.view = "overview"; render(); };
@@ -1582,7 +1653,7 @@ function renderSummaryBox(item){
     nextLine = `<div class="summary-line summary-empty">All steps complete — Rights Secured.</div>`;
   }else{
     const bits = [escapeHtml(next.label)];
-    if(next.pending) bits.push(`waiting on a response${next.pendingDays !== null ? ` (${next.pendingDays}d)` : ""}`);
+    if(next.pending && !next.holdFollowUp) bits.push(`waiting on a response${next.pendingDays !== null ? ` (${next.pendingDays}d)` : ""}`);
     if(next.text) bits.push(escapeHtml(next.text));
     nextLine = `<div class="summary-line">${bits.join(" — ")}</div>`;
   }
@@ -1591,7 +1662,7 @@ function renderSummaryBox(item){
     <div class="summary-box">
       <div class="summary-box-header">
         <h3>${escapeHtml(item.name)}</h3>
-        ${(item.titles && item.titles.length) ? `<div class="summary-titles">${item.titles.map(t => escapeHtml(t)).join(", ")}</div>` : ""}
+        ${(item.titles && item.titles.length) ? `<div class="summary-titles">${orderedTitleList(item).map(t => escapeHtml(t)).join(", ")}</div>` : ""}
       </div>
       <div class="summary-section">
         <div class="summary-section-label">Progress</div>
@@ -1922,7 +1993,7 @@ function renderEstateCategoryPanel(key, label, items){
     const health = itemHealth(STATE.data, item);
     const colorVar = health === "completed" ? "var(--slate)" : `var(--${health})`;
     const labelMap = { green:"On track", yellow:"Watch", red:"At risk", completed:"Completed" };
-    const titleList = (item.titles || []).join(", ");
+    const titleList = orderedTitleList(item).join(", ");
     const row = el(`
       <div class="pulse-row">
         <div class="pulse-left" data-open>
@@ -2063,6 +2134,13 @@ function renderItemDetail(itemId){
       <div style="flex:1; min-width:260px;">
         <input class="detail-title" value="${escapeHtml(item.name)}" id="f-name" />
         <div class="titles-row" id="titles-row"></div>
+        <div class="writer-imdb-field" id="writer-imdb-row">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <a href="${escapeHtml(item.writerImdbUrl || "")}" target="_blank" rel="noopener noreferrer" class="title-tags-toggle" data-role="imdb-link" style="display:${item.writerImdbUrl ? "inline" : "none"}; margin:0;">Writer IMDB ↗</a>
+            <button class="ec-remove" title="Edit" data-role="imdb-edit-toggle" style="display:${item.writerImdbUrl ? "inline-flex" : "none"};">✎</button>
+            <input type="url" class="text-input" id="f-writer-imdb" value="${escapeHtml(item.writerImdbUrl || "")}" placeholder="https://www.imdb.com/name/..." style="max-width:380px; display:${item.writerImdbUrl ? "none" : "block"};" />
+          </div>
+        </div>
         <div class="estate-contact-row" id="estate-contact-row"></div>
       </div>
       <div class="item-badges" style="align-items:flex-end;">
@@ -2103,6 +2181,16 @@ function renderItemDetail(itemId){
     holdFollowUpInput.onchange = (e) => { if(e.target.value) updateHoldFollowUpDate(item, e.target.value); };
   }
   head.querySelector("#titles-row").appendChild(renderTitlesSection(item));
+  const imdbInput = head.querySelector("#f-writer-imdb");
+  const imdbLink = head.querySelector('[data-role="imdb-link"]');
+  const imdbEditToggle = head.querySelector('[data-role="imdb-edit-toggle"]');
+  bindCommit(imdbInput, v => updateItemField(item, "writerImdbUrl", v.trim()));
+  imdbEditToggle.onclick = () => {
+    imdbLink.style.display = "none";
+    imdbEditToggle.style.display = "none";
+    imdbInput.style.display = "block";
+    imdbInput.focus();
+  };
   head.querySelector("#estate-contact-row").appendChild(renderEstateContactSection(item));
   wrap.appendChild(head);
 
@@ -2244,6 +2332,7 @@ function renderEstateContactSection(item){
         <div class="ec-lines">
           <div class="ec-line"><span class="ec-line-label">Name</span><div class="ec-rich-holder" data-holder="name-rich"></div></div>
           <div class="ec-line"><span class="ec-line-label">Company</span><div class="ec-rich-holder" data-holder="company-rich"></div></div>
+          <div class="ec-line"><span class="ec-line-label">Position</span><div class="ec-rich-holder" data-holder="position-rich"></div></div>
           <div class="ec-line"><span class="ec-line-label">Phone</span><div class="ec-rich-holder" data-holder="phone-rich"></div></div>
           <div class="ec-line"><span class="ec-line-label">Email</span><div class="ec-rich-holder" data-holder="email-rich"></div></div>
           <div class="ec-line ec-line-rich adaptation-row"><span class="ec-line-label">Notes</span><div class="adaptation-rich" data-holder="notes-rich"></div></div>
@@ -2251,7 +2340,7 @@ function renderEstateContactSection(item){
       </div>
     `);
     const ecFieldSpecs = [
-      ["name", "Full name"], ["company", "Company"], ["phone", "(000) 000-0000"], ["email", "name@example.com"],
+      ["name", "Full name"], ["company", "Company"], ["position", "Position"], ["phone", "(000) 000-0000"], ["email", "name@example.com"],
     ];
     ecFieldSpecs.forEach(([field, placeholder]) => {
       const line = createRichTextLine(ec[field] || "", placeholder, "ec-line-input");
@@ -2271,7 +2360,7 @@ function renderEstateContactSection(item){
 }
 function addEstateContact(item){
   migrateEstateContacts(item);
-  item.estateContacts.push({ id: uid("ec"), name:"", company:"", phone:"", email:"", notes:"" });
+  item.estateContacts.push({ id: uid("ec"), name:"", company:"", position:"", phone:"", email:"", notes:"" });
   recordChange(item.id, "item", item.id, item.name, "estateContacts", "Estate contact added", "", "");
   scheduleSave();
   render();
@@ -2296,35 +2385,131 @@ function updateEstateContact(item, idx, key, value){
   render();
 }
 
+function migrateTitlePriority(item){
+  if(!Array.isArray(item.priorityTitles)) item.priorityTitles = [];
+  if(typeof item.additionalTitlesHidden !== "boolean") item.additionalTitlesHidden = false;
+}
+function isTitlePriority(item, title){
+  migrateTitlePriority(item);
+  return item.priorityTitles.includes(title);
+}
+function toggleTitlePriority(item, title){
+  migrateTitlePriority(item);
+  const idx = item.priorityTitles.indexOf(title);
+  if(idx === -1){
+    item.priorityTitles.push(title);
+    recordChange(item.id, "item", item.id, item.name, "titlePriority", "Title marked priority", "", title);
+  }else{
+    item.priorityTitles.splice(idx, 1);
+    recordChange(item.id, "item", item.id, item.name, "titlePriority", "Title unmarked priority", title, "");
+  }
+  scheduleSave();
+  render();
+}
+function toggleAdditionalTitlesHidden(item){
+  migrateTitlePriority(item);
+  item.additionalTitlesHidden = !item.additionalTitlesHidden;
+  scheduleSave();
+  render();
+}
+/** Priority titles first, wherever a compact title list is shown (Estates
+ * rows, Progress Summary). Order within each group is preserved. */
+function orderedTitleList(item){
+  if(!item.titles || !item.titles.length) return [];
+  migrateTitlePriority(item);
+  const priority = item.titles.filter(t => item.priorityTitles.includes(t));
+  const rest = item.titles.filter(t => !item.priorityTitles.includes(t));
+  return [...priority, ...rest];
+}
 function renderTitlesSection(item){
   if(!item.titles) item.titles = [];
+  migrateTitlePriority(item);
   const wrap = el(`<div></div>`);
-  const tags = el(`<div class="title-tags"></div>`);
+
+  const priorityEntries = [];
+  const additionalEntries = [];
   item.titles.forEach((title, idx) => {
-    const tag = el(`<span class="title-tag">${escapeHtml(title)}<button data-role="remove" title="Remove">×</button></span>`);
+    (isTitlePriority(item, title) ? priorityEntries : additionalEntries).push({ title, idx });
+  });
+
+  const buildTag = ({ title, idx }, priority) => {
+    const tag = el(`
+      <span class="title-tag ${priority ? "title-tag-priority" : ""}">
+        <button class="title-tag-star ${priority ? "active" : ""}" data-role="star" title="${priority ? "Unmark priority" : "Mark as priority"}">★</button>
+        <span>${escapeHtml(title)}</span>
+        <button data-role="remove" title="Remove">×</button>
+      </span>
+    `);
+    tag.querySelector('[data-role="star"]').onclick = () => toggleTitlePriority(item, title);
     tag.querySelector('[data-role="remove"]').onclick = () => removeTitle(item, idx);
-    tags.appendChild(tag);
-  });
-  const addForm = el(`
-    <span class="title-tag title-tag-add">
-      <input type="text" id="new-title-input" placeholder="+ Add title" />
-    </span>
-  `);
-  const input = addForm.querySelector("input");
-  let submitted = false;
-  input.addEventListener("keydown", (e) => {
-    if(e.key === "Enter"){ e.preventDefault(); submitted = true; addTitle(item, input.value); }
-  });
-  input.addEventListener("blur", () => { if(!submitted && input.value.trim()) addTitle(item, input.value); });
-  tags.appendChild(addForm);
-  wrap.appendChild(tags);
+    return tag;
+  };
+
+  if(priorityEntries.length){
+    const priorityRow = el(`<div class="title-tags"></div>`);
+    priorityEntries.forEach(entry => priorityRow.appendChild(buildTag(entry, true)));
+    wrap.appendChild(priorityRow);
+  }
+
+  const toggleBtn = el(`<button class="title-tags-toggle" data-role="toggle-additional">${item.additionalTitlesHidden ? "Show additional titles" : "Hide additional titles"}</button>`);
+  toggleBtn.onclick = () => toggleAdditionalTitlesHidden(item);
+  wrap.appendChild(toggleBtn);
+
+  if(!item.additionalTitlesHidden){
+    const additionalRow = el(`<div class="title-tags"></div>`);
+    additionalEntries.forEach(entry => additionalRow.appendChild(buildTag(entry, false)));
+    const addForm = el(`
+      <span class="title-tag title-tag-add">
+        <input type="text" id="new-title-input" placeholder="+ Add title" />
+      </span>
+    `);
+    const input = addForm.querySelector("input");
+    let submitted = false;
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); submitted = true; addTitle(item, input.value); }
+    });
+    input.addEventListener("blur", () => { if(!submitted && input.value.trim()) addTitle(item, input.value); });
+    additionalRow.appendChild(addForm);
+    wrap.appendChild(additionalRow);
+  }
+
   return wrap;
+}
+/** Keeps the tag list under the estate name and the full Titles panel below
+ * pointing at the same set of titles — a title added/renamed/removed in
+ * either place is reflected in the other, and priority (which is tracked
+ * once per title text, not per-list) is shared automatically as a result. */
+function ensureTitleTag(item, title){
+  if(!title) return;
+  if(!item.titles) item.titles = [];
+  if(!item.titles.includes(title)) item.titles.push(title);
+}
+function removeTitleTagByText(item, title){
+  if(!item.titles || !title) return;
+  const idx = item.titles.indexOf(title);
+  if(idx === -1) return;
+  item.titles.splice(idx, 1);
+  migrateTitlePriority(item);
+  const pIdx = item.priorityTitles.indexOf(title);
+  if(pIdx !== -1) item.priorityTitles.splice(pIdx, 1);
+}
+function ensureTitleDetailForTag(item, title){
+  migrateTitleDetails(item);
+  if(!item.titleDetails.some(td => td.title === title)){
+    item.titleDetails.push({ id: uid("td"), title, logline:"", genre:"", originalOrAdapted:"", episodeCount:"", basedOn:"", originalRun:"", broadcaster:"", adaptations:[], notes:"", posted:false });
+  }
+}
+function removeTitleDetailByText(item, title){
+  migrateTitleDetails(item);
+  const idx = item.titleDetails.findIndex(td => td.title === title);
+  if(idx !== -1) item.titleDetails.splice(idx, 1);
 }
 function addTitle(item, value){
   const title = value.trim();
   if(!title) return;
   if(!item.titles) item.titles = [];
   item.titles.push(title);
+  ensureTitleDetailForTag(item, title);
   recordChange(item.id, "item", item.id, item.name, "titles", "Title added", "", title);
   scheduleSave();
   render();
@@ -2332,6 +2517,10 @@ function addTitle(item, value){
 function removeTitle(item, idx){
   const removed = item.titles[idx];
   item.titles.splice(idx, 1);
+  migrateTitlePriority(item);
+  const priorityIdx = item.priorityTitles.indexOf(removed);
+  if(priorityIdx !== -1) item.priorityTitles.splice(priorityIdx, 1);
+  removeTitleDetailByText(item, removed);
   recordChange(item.id, "item", item.id, item.name, "titles", "Title removed", removed, "");
   scheduleSave();
   render();
@@ -2859,11 +3048,31 @@ function migrateTitleDetails(item){
 }
 function renderTitleDetailsPanel(item){
   migrateTitleDetails(item);
+  migrateTitlePriority(item);
   const panel = el(`<div class="panel"><div class="panel-head"><div><h2>Titles</h2></div></div><div class="panel-pad" id="td-list"></div></div>`);
   const list = panel.querySelector("#td-list");
+
+  const priorityDetails = [];
+  const additionalDetails = [];
   item.titleDetails.forEach((td, idx) => {
+    (isTitlePriority(item, td.title) ? priorityDetails : additionalDetails).push({ td, idx });
+  });
+
+  priorityDetails.forEach(({ td, idx }) => {
     list.appendChild(td.posted ? renderPostedTitleBlock(item, td, idx) : renderEditableTitleBlock(item, td, idx));
   });
+
+  if(additionalDetails.length){
+    const toggleBtn = el(`<button class="title-tags-toggle" data-role="toggle-additional">${item.additionalTitlesHidden ? "Show additional titles" : "Hide additional titles"}</button>`);
+    toggleBtn.onclick = () => toggleAdditionalTitlesHidden(item);
+    list.appendChild(toggleBtn);
+    if(!item.additionalTitlesHidden){
+      additionalDetails.forEach(({ td, idx }) => {
+        list.appendChild(td.posted ? renderPostedTitleBlock(item, td, idx) : renderEditableTitleBlock(item, td, idx));
+      });
+    }
+  }
+
   const addBtn = el(`<button class="btn btn-sm" id="td-add">+ Add title</button>`);
   addBtn.onclick = () => addTitleDetail(item);
   list.appendChild(addBtn);
@@ -2873,6 +3082,7 @@ function renderEditableTitleBlock(item, td, idx){
   const block = el(`
     <div class="td-block">
       <div class="td-top">
+        ${td.title ? `<button class="title-tag-star ${isTitlePriority(item, td.title) ? "active" : ""}" data-role="star" title="${isTitlePriority(item, td.title) ? "Unmark priority" : "Mark as priority"}">★</button>` : ""}
         <div id="td-title-holder" style="flex:1;"></div>
         <button class="btn btn-sm" data-role="finish">Lock</button>
         <button class="ec-remove" title="Remove title" data-role="remove">×</button>
@@ -2973,6 +3183,8 @@ function renderEditableTitleBlock(item, td, idx){
   });
   block.querySelector('[data-role="remove"]').onclick = () => removeTitleDetail(item, idx);
   block.querySelector('[data-role="finish"]').onclick = () => setTitleDetailPosted(item, idx, true);
+  const starBtn = block.querySelector('[data-role="star"]');
+  if(starBtn) starBtn.onclick = () => toggleTitlePriority(item, td.title);
   return block;
 }
 /** Splits sanitized rich-text HTML on its <br> line breaks into separate items. */
@@ -3048,6 +3260,7 @@ function renderPostedTitleBlock(item, td, idx){
   const block = el(`
     <div class="td-block td-posted">
       <div class="td-top">
+        ${td.title ? `<button class="title-tag-star ${isTitlePriority(item, td.title) ? "active" : ""}" data-role="star" title="${isTitlePriority(item, td.title) ? "Unmark priority" : "Mark as priority"}">★</button>` : ""}
         <div class="td-title-display">${td.title || "Untitled"}</div>
         <button class="btn btn-sm" data-role="edit">Edit</button>
       </div>
@@ -3058,6 +3271,8 @@ function renderPostedTitleBlock(item, td, idx){
     </div>
   `);
   block.querySelector('[data-role="edit"]').onclick = () => setTitleDetailPosted(item, idx, false);
+  const starBtn = block.querySelector('[data-role="star"]');
+  if(starBtn) starBtn.onclick = () => toggleTitlePriority(item, td.title);
   return block;
 }
 function setTitleDetailPosted(item, idx, posted){
@@ -3080,6 +3295,7 @@ function removeTitleDetail(item, idx){
   migrateTitleDetails(item);
   const removed = item.titleDetails[idx];
   item.titleDetails.splice(idx, 1);
+  if(removed && removed.title) removeTitleTagByText(item, removed.title);
   recordChange(item.id, "item", item.id, item.name, "titleDetails", "Title removed", (removed && removed.title) || "", "");
   scheduleSave();
   render();
@@ -3091,6 +3307,12 @@ function updateTitleDetail(item, idx, key, value){
   const old = td[key] || "";
   if(old === value) return;
   td[key] = value;
+  if(key === "title"){
+    // keep the tag list under the estate name in sync with a rename here
+    if(old) removeTitleTagByText(item, old);
+    const trimmed = (value || "").trim();
+    if(trimmed) ensureTitleTag(item, trimmed);
+  }
   recordChange(item.id, "item", item.id, item.name, "titleDetails." + idx + "." + key, "Title " + key, old, value);
   scheduleSave();
   render();
