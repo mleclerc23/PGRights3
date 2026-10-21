@@ -274,6 +274,11 @@
   .todo-done:hover{ border-color: var(--ink) !important; background: var(--panel-alt) !important; }
   .todo-done.on{ background: var(--ink) !important; border-color: var(--ink) !important; color:#fff; }
   .todo-done:disabled{ cursor:default; opacity:.55; }
+  .todo-remove{ font-size:16px; opacity:.7; align-self:flex-start; }
+  .todo-remove:hover{ opacity:1; }
+  .todo-remove:disabled{ opacity:.25; cursor:default; }
+  .todo-remove.armed, .progress-delete.armed{ background: var(--red-bg); color: var(--red); border-radius:10px; font-size:11px; padding:2px 8px; opacity:1; }
+  .progress-delete:disabled{ opacity:.35; }
   .todo-lock{ background:none; border:none; color: var(--text-faint); cursor:pointer; padding:3px 5px; border-radius:4px; line-height:0; align-self:flex-start; margin-top:2px; }
   .todo-lock:hover{ color: var(--text); background: var(--panel-alt); }
   .todo-lock.on{ color: var(--ink); }
@@ -1913,6 +1918,20 @@ function dragKind(e){
   const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
   return types.includes("text/plain") ? (STATE.dragKind || "todo") : "";
 }
+/** Two-step delete: first click arms the button ("Delete?"), second click within 3s removes the to-do. */
+function bindConfirmDelete(btn, onConfirm, idleLabel){
+  let armed = false, timer = null;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if(btn.disabled) return;
+    if(!armed){
+      armed = true; btn.classList.add("armed"); btn.textContent = "Delete?";
+      timer = setTimeout(() => { armed = false; btn.classList.remove("armed"); btn.innerHTML = idleLabel; }, 3000);
+    }else{
+      clearTimeout(timer); onConfirm();
+    }
+  });
+}
 /** Small padlock icon (closed when locked). */
 function lockIconSVG(locked){
   return locked
@@ -1944,7 +1963,7 @@ function renderTodoItemsEditor(item){
           </div>
         </div>
         ${lockButtonHTML(t)}
-        ${t.locked ? "" : `<button class="ec-remove" title="Remove to-do" data-role="remove">&times;</button>`}
+        <button class="ec-remove todo-remove" title="${t.locked ? "Unlock to delete" : "Delete to-do"}" data-role="remove" ${t.locked ? "disabled" : ""}>&times;</button>
       </div>
     `);
     const textLine = createRichTextLine(t.text || "", "What needs doing…", "todo-task-input");
@@ -1964,7 +1983,7 @@ function renderTodoItemsEditor(item){
     r.querySelector('[data-role="urgent"]').onclick = () => { if(!t.locked) updateTodo(item, t.id, "urgent", !t.urgent); };
     r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
     const rm = r.querySelector('[data-role="remove"]');
-    if(rm) rm.onclick = () => removeTodo(item, t.id);
+    if(rm) bindConfirmDelete(rm, () => removeTodo(item, t.id), "&times;");
     const dragH = r.querySelector('[data-role="drag"]');
     dragH.addEventListener("dragstart", (e) => {
       e.stopPropagation();
@@ -2051,10 +2070,12 @@ function buildProgressRow(item, t){
       <span class="pill ${t.done ? "pill-onplan" : "pill-pending"}">${t.done ? "done" : "open"}</span>
       ${t.done && !t.locked ? `<button class="btn btn-sm btn-ghost" data-role="reopen">Reopen</button>` : ""}
       ${t.done ? lockButtonHTML(t) : ""}
+      <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>Delete</button>
     </div>
   `);
   const reopen = row.querySelector('[data-role="reopen"]');
   if(reopen) reopen.onclick = () => updateTodo(item, t.id, "done", false);
+  bindConfirmDelete(row.querySelector('[data-role="pdelete"]'), () => removeTodo(item, t.id), "Delete");
   const lockBtn = row.querySelector('[data-role="lock"]');
   if(lockBtn) lockBtn.onclick = () => updateTodo(item, t.id, "locked", !t.locked);
   const doneAtInput = row.querySelector('[data-role="doneat"]');
