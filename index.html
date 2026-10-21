@@ -251,6 +251,9 @@
   .rich-editable ul, .rich-editable ol, .todo-notes-live ul, .todo-notes-live ol, .progress-notes ul, .td-readonly-text ul{ margin:2px 0; padding-left:20px; list-style:disc; }
   .rich-editable ol, .todo-notes-live ol{ list-style:decimal; }
   .rich-editable li, .todo-notes-live li, .progress-notes li{ margin:1px 0; }
+  .todo-entry-remove{ margin-left:auto; font-size:11px; opacity:.6; }
+  .todo-entry-remove:hover{ opacity:1; }
+  .todo-entry-remove.armed{ background: var(--red-bg); color: var(--red); opacity:1; }
   .todo-drag{ cursor:grab; color: var(--text-faint); font-size:14px; line-height:1; align-self:flex-start; margin-top:4px; opacity:.55; user-select:none; flex:0 0 auto; }
   .todo-drag:hover{ opacity:1; color: var(--text-dim); }
   .todo-drag:active{ cursor:grabbing; }
@@ -1919,13 +1922,13 @@ function dragKind(e){
   return types.includes("text/plain") ? (STATE.dragKind || "todo") : "";
 }
 /** Two-step delete: first click arms the button ("Delete?"), second click within 3s removes the to-do. */
-function bindConfirmDelete(btn, onConfirm, idleLabel){
+function bindConfirmDelete(btn, onConfirm, idleLabel, armedLabel){
   let armed = false, timer = null;
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     if(btn.disabled) return;
     if(!armed){
-      armed = true; btn.classList.add("armed"); btn.textContent = "Delete?";
+      armed = true; btn.classList.add("armed"); btn.textContent = armedLabel || "Delete?";
       timer = setTimeout(() => { armed = false; btn.classList.remove("armed"); btn.innerHTML = idleLabel; }, 3000);
     }else{
       clearTimeout(timer); onConfirm();
@@ -2137,6 +2140,16 @@ function buildTodoDocHTML(items, heading){
   return h + `</ul>`;
 }
 
+/** Take an estate off the To-Do page: deletes its open to-dos and dismisses its hold follow-up (the estate itself is untouched). */
+function removeTodoEntry(item){
+  migrateTodos(item);
+  const open = item.todos.filter(t => !t.done);
+  for(const t of open) recordChange(item.id, "item", item.id, item.name, "todoRemove", "To-do removed", stripTags(t.text), "");
+  item.todos = item.todos.filter(t => t.done);
+  if(item.estateCategory === "hold" && isValidDate(item.holdFollowUpDate)) item.todoFollowUpDismissed = item.holdFollowUpDate;
+  scheduleSave();
+  render();
+}
 function renderTodoTab(){
   const wrap = el(`<div></div>`);
   const view = STATE.todoView || "list";
@@ -2155,7 +2168,7 @@ function renderTodoTab(){
   const today = todayISO();
   const open = STATE.data.items.filter(i => !(i.stepActuals && i.stepActuals.target_rights_secured));
   for(const i of open) migrateTodos(i);
-  const holdDate = (i) => (i.estateCategory === "hold" && isValidDate(i.holdFollowUpDate)) ? i.holdFollowUpDate : null;
+  const holdDate = (i) => (i.estateCategory === "hold" && isValidDate(i.holdFollowUpDate) && i.todoFollowUpDismissed !== i.holdFollowUpDate) ? i.holdFollowUpDate : null;
   const hasUrgent = (i) => openTodos(i).some(t => t.urgent);
   const general = getGeneralItem();
   const order = Array.isArray(STATE.data.todoOrder) ? STATE.data.todoOrder : [];
@@ -2225,6 +2238,7 @@ function renderTodoTab(){
           <span class="todo-drag todo-entry-drag" draggable="true" data-role="entry-drag" title="Drag to reorder">&#10303;</span>
           ${titles ? `<span class="todo-entry-titles">${escapeHtml(titles)}</span> – ` : ""}<span class="todo-entry-name">${escapeHtml(item.name)}</span>${isGeneral ? `<span class="todo-entry-sub">not linked to an estate or title</span>` : ""}
           ${hd ? `<span class="pill ${hd < today ? "pill-late" : "pill-pending"}">${hd < today ? "follow-up overdue" : "follow up"} ${fmtDateShort(hd)}</span>` : ""}
+          ${isGeneral ? "" : `<button class="btn btn-sm btn-ghost todo-entry-remove" data-role="entry-remove" title="Remove this whole entry from the To-Do page">Remove</button>`}
         </div>
         <div class="todo-lines">${lines.map(l => `<div class="todo-line">${l}</div>`).join("")}</div>
         <div data-holder="items"></div>
@@ -2245,6 +2259,8 @@ function renderTodoTab(){
     });
     if(!isGeneral) entry.querySelector('[data-holder="items"]').before(liveNotes);
     entry.querySelector('[data-role="open"]').onclick = () => { if(isGeneral) return; STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+    const er = entry.querySelector('[data-role="entry-remove"]');
+    if(er) bindConfirmDelete(er, () => removeTodoEntry(item), "Remove", "Remove all?");
     const eh = entry.querySelector('[data-role="entry-drag"]');
     eh.addEventListener("click", (e) => e.stopPropagation());
     eh.addEventListener("dragstart", (e) => {
