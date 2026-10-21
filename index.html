@@ -265,6 +265,8 @@
   .todo-entry.dragging-note{ opacity:.45; }
   .todo-notes-live{ font-size:12.5px; color: var(--text-dim); line-height:1.5; margin-top:4px; min-height:1.5em; }
   .todo-notes-live:focus{ background: var(--panel-alt); border-radius:4px; }
+  .todo-line-live{ min-height:1.5em; border-radius:3px; }
+  .todo-line-live:focus{ background: var(--panel-alt); }
   .todo-line{ font-size:12.5px; color: var(--text-dim); line-height:1.5; }
   .todo-items{ margin-top:8px; }
   .todo-item-row{ display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-top:1px solid var(--border-soft); }
@@ -1853,7 +1855,7 @@ const RIGHTS_AVAILABLE_IMPORT = [
   { names: ["Colin Dexter Estate"],
     notes: ["Rights available.", "Agent: Jon Mitchell, Macmillan Press. He never had an agent and they handle everything. Now working with Katie Haines at The Agency. His book editor Maria important in the mix. His kids Sally & Jeremy are the final say."],
     todo: "send offer to: {mail:jon.mitchell@macmillan.com}" },
-  { names: ["Michael J. Bird Estate", "Michael J Bird Estate"],
+  { names: ["Michael J. Bird Estate", "Michael J Bird Estate", "Michael J. Bird Estatee"],
     notes: ["Rights available", "Agent / contact: John Lanasis – actor who got estate to let him handle the rights."],
     todo: "emailed pitch and we now need to send an offer" },
   { names: ["Leon Griffith Estate"],
@@ -1899,19 +1901,27 @@ function splitNoteLines(html){
     .filter(x => stripTags(x));
 }
 /** Contacts ("Agent: Name  phone  email") plus the estate's Additional Notes, one line each. */
-function todoContactLines(item){
+/** One entry per contact: the auto-built "Position: Name, Company  phone  email" line, unless you've typed over it. */
+function todoContactEntries(item){
   migrateEstateContacts(item);
   const out = [];
   for(const ec of item.estateContacts){
+    if(typeof ec.todoLine === "string"){
+      if(stripTags(ec.todoLine)) out.push({ ec, html: ec.todoLine });
+      continue;
+    }
     const pos = stripTags(ec.position), name = stripTags(ec.name), co = stripTags(ec.company);
     const phone = stripTags(ec.phone), email = stripTags(ec.email), note = stripTags(ec.notes);
     const who = [name, co].filter(Boolean).join(", ");
     const reach = [phone, email].filter(Boolean).join("  ");
     const line = [who, reach].filter(Boolean).join("  ");
     if(!line && !note) continue;
-    out.push(`${escapeHtml(pos || "Contact")}: ${escapeHtml(line)}${note ? (line ? ". " : "") + escapeHtml(note) : ""}`);
+    out.push({ ec, html: `${escapeHtml(pos || "Contact")}: ${escapeHtml(line)}${note ? (line ? ". " : "") + escapeHtml(note) : ""}` });
   }
   return out;
+}
+function todoContactLines(item){
+  return todoContactEntries(item).map(e => e.html);
 }
 function todoNoteLines(item){
   return todoContactLines(item).concat(splitNoteLines(item.notes));
@@ -2287,7 +2297,7 @@ function renderTodoTab(){
   for(const item of rows){
     const titles = todoTitlesLabel(item);
     const isGeneral = item.id === GENERAL_ID;
-    const lines = isGeneral ? [] : todoContactLines(item);
+    const lines = isGeneral ? [] : todoContactEntries(item);
     const hd = holdDate(item);
     const entry = el(`
       <div class="todo-entry">
@@ -2297,11 +2307,35 @@ function renderTodoTab(){
           ${hd ? `<span class="pill ${hd < today ? "pill-late" : "pill-pending"}">${hd < today ? "follow-up overdue" : "follow up"} ${fmtDateShort(hd)}</span>` : ""}
           ${isGeneral ? "" : `<button class="btn btn-sm btn-ghost todo-entry-remove" data-role="entry-remove" title="Remove this whole entry from the To-Do page">Remove</button>`}
         </div>
-        <div class="todo-lines">${lines.map(l => `<div class="todo-line">${l}</div>`).join("")}</div>
+        <div class="todo-lines"></div>
         <div data-holder="items"></div>
       </div>
     `);
     if(!lines.length) entry.querySelector(".todo-lines").remove();
+    else{
+      const box = entry.querySelector(".todo-lines");
+      for(const ln of lines){
+        const d = document.createElement("div");
+        d.className = "rich-line todo-line todo-line-live";
+        d.contentEditable = "true";
+        d.innerHTML = ln.html;
+        bindBulletShortcuts(d);
+        d.addEventListener("keydown", (e) => {
+          if(e.key === "Enter"){ e.preventDefault(); d.blur(); }
+          if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); insertLinkAtSelection(d); }
+        });
+        let committed = sanitizeRichHTML(d.innerHTML);
+        d.addEventListener("blur", () => {
+          const clean = sanitizeRichHTML(d.innerHTML);
+          if(clean === committed) return;
+          committed = clean;
+          ln.ec.todoLine = stripTags(clean).trim() ? clean : "";
+          if(!ln.ec.todoLine) d.remove();
+          scheduleSave();
+        });
+        box.appendChild(d);
+      }
+    }
     // Estate notes: live, editable text (the same Additional Notes shown on the estate page)
     const liveNotes = document.createElement("div");
     liveNotes.className = "rich-line todo-notes-live";
