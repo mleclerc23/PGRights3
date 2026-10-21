@@ -1275,11 +1275,9 @@ function recordChange(itemId, entity, entityId, label, field, fieldLabel, oldVal
   });
 }
 
-/* ---- Estates page: To Call / In the Works / Hold for Now ------------- */
+/* ---- Estates page: Pursuing / Hold for Now ------------- */
 const ESTATE_CATEGORIES = [
-  ["to-call", "To Call"],
-  ["in-the-works", "In the Works"],
-  ["tracking-info", "Tracking Down Info"],
+  ["pursuing", "Pursuing"],
   ["hold", "Hold for Now"],
 ];
 function estateCategoryLabel(key){
@@ -1287,7 +1285,8 @@ function estateCategoryLabel(key){
   return entry ? entry[1] : key;
 }
 function migrateEstateCategory(item){
-  if(!ESTATE_CATEGORIES.some(c => c[0] === item.estateCategory)) item.estateCategory = "in-the-works";
+  // Older categories (To Call / In the Works / Tracking Down Info) are all "Pursuing" now; Hold for Now stays as it was.
+  if(!ESTATE_CATEGORIES.some(c => c[0] === item.estateCategory)) item.estateCategory = "pursuing";
 }
 const HOLD_FOLLOWUP_DAYS = 14;
 function updateEstateCategory(item, value){
@@ -4356,7 +4355,7 @@ function renderNewItemModal(){
       id: uid("itm"), name, owner: "", currentPhase: "Call", status: "",
       summary: "", notes: "",
       target_call:"", target_pitch:"", target_proposal:"",
-      target_rights_secured:"", stepNotes:{}, stepActuals:{}, customSteps:[], removedPresetSteps:[], stepPending:{}, stepLabelOverrides:{}, estateCategory:"in-the-works", todoCategory:"call", todo:{stepRef:"",text:"",priority:false,assignee:""}, titles:[], estateContacts:[],
+      target_rights_secured:"", stepNotes:{}, stepActuals:{}, customSteps:[], removedPresetSteps:[], stepPending:{}, stepLabelOverrides:{}, estateCategory:"pursuing", todoCategory:"call", todo:{stepRef:"",text:"",priority:false,assignee:""}, titles:[], estateContacts:[],
       titleDetails:[], createdAt: now, updatedAt: now,
     };
     STATE.data.items.push(item);
