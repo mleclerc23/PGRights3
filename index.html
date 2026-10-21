@@ -2321,7 +2321,7 @@ function renderTodoTab(){
         d.innerHTML = ln.html;
         bindBulletShortcuts(d);
         d.addEventListener("keydown", (e) => {
-          if(e.key === "Enter"){ e.preventDefault(); d.blur(); }
+          if(e.key === "Enter"){ e.preventDefault(); if(e.altKey || e.shiftKey) document.execCommand("insertLineBreak"); else d.blur(); }
           if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); insertLinkAtSelection(d); }
         });
         let committed = sanitizeRichHTML(d.innerHTML);
@@ -3056,7 +3056,11 @@ function createRichTextLine(initialHTML, placeholder, className){
       if(key === "i"){ e.preventDefault(); document.execCommand("italic", false, null); return; }
       if(key === "k"){ e.preventDefault(); insertLinkAtSelection(div); return; }
     }
-    if(e.key === "Enter"){ e.preventDefault(); div.blur(); }
+    if(e.key === "Enter"){
+      e.preventDefault();
+      if(e.altKey || e.shiftKey){ document.execCommand("insertLineBreak"); return; }  // Option/Alt+Enter = new line
+      div.blur();
+    }
   });
   return div;
 }
