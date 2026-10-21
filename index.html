@@ -254,6 +254,9 @@
   .todo-entry-remove{ margin-left:auto; font-size:11px; opacity:.6; }
   .todo-entry-remove:hover{ opacity:1; }
   .todo-entry-remove.armed{ background: var(--red-bg); color: var(--red); opacity:1; }
+  .todo-entry-titles{ outline:none; cursor:text; border-radius:3px; }
+  .todo-entry-titles:focus{ background: var(--panel-alt); box-shadow:0 0 0 2px var(--panel-alt); }
+  body.is-dragging{ cursor:grabbing; user-select:none; -webkit-user-select:none; }
   .todo-drag{ cursor:grab; color: var(--text-faint); font-size:14px; line-height:1; align-self:flex-start; margin-top:4px; opacity:.55; user-select:none; flex:0 0 auto; }
   .todo-drag:hover{ opacity:1; color: var(--text-dim); }
   .todo-drag:active{ cursor:grabbing; }
@@ -1913,13 +1916,90 @@ function todoContactLines(item){
 function todoNoteLines(item){
   return todoContactLines(item).concat(splitNoteLines(item.notes));
 }
+/** Heading shown for an estate on the To-Do page and in the Formatted view.
+ *  1) a heading you typed yourself, 2) otherwise the titles its open to-dos are tagged to, 3) otherwise all its titles. */
 function todoTitlesLabel(item){
+  const own = stripTags(item.todoTitleLabel || "").trim();
+  if(own) return own.toUpperCase();
+  if(Array.isArray(item.todos)){
+    const open = item.todos.filter(t => !t.done && !richIsEmpty(t.text));
+    if(open.length && open.every(t => t.title)){
+      const tagged = new Set(open.map(t => t.title));
+      const ordered = (item.titles && item.titles.length ? orderedTitleList(item) : []).filter(t => tagged.has(t));
+      const names = (ordered.length ? ordered : Array.from(tagged)).map(t => stripTags(t)).filter(Boolean);
+      if(names.length) return names.join(" / ").toUpperCase();
+    }
+  }
   return (item.titles && item.titles.length) ? orderedTitleList(item).map(t => stripTags(t)).filter(Boolean).join(" / ").toUpperCase() : "";
 }
+/** Typed heading -> stored heading. Pieces that match one of the estate's titles use that title's spelling. */
+function normalizeTitleHeading(item, text){
+  const known = (item.titles || []).map(t => stripTags(t)).filter(Boolean);
+  return text.split("/").map(p => p.trim()).filter(Boolean).map(p => {
+    const hit = known.find(k => k.toLowerCase() === p.toLowerCase());
+    return hit || p;
+  }).join(" / ");
+}
 
-function dragKind(e){
-  const types = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
-  return types.includes("text/plain") ? (STATE.dragKind || "todo") : "";
+/** Pointer-based drag (works in every browser and on touch, unlike native HTML5 drag-and-drop). */
+function bindPointerDrag(handle, srcEl, kind, srcItemId, srcTodoId){
+  handle.style.touchAction = "none";
+  handle.addEventListener("pointerdown", (e) => {
+    if(e.button) return;
+    e.preventDefault(); e.stopPropagation();
+    try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+    const startY = e.clientY, startX = e.clientX;
+    let dragging = false, hot = null, hotTodo = null;
+    const clear = () => { document.querySelectorAll(".drop-target-note").forEach(x => x.classList.remove("drop-target-note")); };
+    const find = (x, y) => {
+      const under = document.elementFromPoint(x, y);
+      if(!under) return null;
+      if(kind === "todo"){
+        const row = under.closest(".todo-item-row");
+        if(row && row.dataset.todoId) return { el: row, itemId: row.dataset.itemId, before: row.dataset.todoId };
+        const add = under.closest(".todo-add-wrap");
+        if(add && add.dataset.itemId) return { el: add, itemId: add.dataset.itemId, before: null };
+        const ent = under.closest(".todo-entry");
+        if(ent && ent.dataset.itemId) return { el: ent, itemId: ent.dataset.itemId, before: null };
+        return null;
+      }
+      const ent = under.closest(".todo-entry");
+      return ent && ent.dataset.itemId ? { el: ent, itemId: ent.dataset.itemId } : null;
+    };
+    const move = (ev) => {
+      if(!dragging && Math.abs(ev.clientY - startY) + Math.abs(ev.clientX - startX) > 5){
+        dragging = true; srcEl.classList.add("dragging-note"); document.body.classList.add("is-dragging");
+      }
+      if(!dragging) return;
+      clear();
+      hot = find(ev.clientX, ev.clientY);
+      if(hot && hot.el !== srcEl) hot.el.classList.add("drop-target-note");
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      clear(); srcEl.classList.remove("dragging-note"); document.body.classList.remove("is-dragging");
+      if(dragging && hot) onPointerDrop(kind, srcItemId, srcTodoId, hot);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  });
+}
+function onPointerDrop(kind, srcItemId, srcTodoId, target){
+  if(kind === "todo"){
+    moveTodoBefore(srcItemId, srcTodoId, target.itemId, target.before);
+    return;
+  }
+  if(target.itemId === srcItemId) return;
+  const ids = Array.from(document.querySelectorAll(".todo-entry")).map(x => x.dataset.itemId).filter(Boolean);
+  const from = ids.indexOf(srcItemId), to = ids.indexOf(target.itemId);
+  if(from === -1 || to === -1) return;
+  moveArrayItem(ids, from, from < to ? to + 1 : to);
+  STATE.data.todoOrder = ids;
+  scheduleSave();
+  renderOverviewInPlace();
 }
 /** Two-step delete: first click arms the button ("Delete?"), second click within 3s removes the to-do. */
 function bindConfirmDelete(btn, onConfirm, idleLabel, armedLabel){
@@ -1953,7 +2033,7 @@ function renderTodoItemsEditor(item){
   const buildRow = (t) => {
     const r = el(`
       <div class="todo-item-row ${t.done ? "is-done" : ""} ${t.locked ? "is-locked" : ""}">
-        <span class="todo-drag" draggable="true" title="Drag to reorder" data-role="drag">&#10303;</span>
+        <span class="todo-drag" title="Drag to reorder" data-role="drag">&#10303;</span>
         <button class="todo-done ${t.done ? "on" : ""}" data-role="done" title="${t.done ? "Mark not done" : "Mark done"}" ${t.locked ? "disabled" : ""}>${t.done ? "&#10003;" : ""}</button>
         <div class="todo-item-main">
           <div class="todo-text-row">
@@ -1987,25 +2067,8 @@ function renderTodoItemsEditor(item){
     r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
     const rm = r.querySelector('[data-role="remove"]');
     if(rm) bindConfirmDelete(rm, () => removeTodo(item, t.id), "&times;");
-    const dragH = r.querySelector('[data-role="drag"]');
-    dragH.addEventListener("dragstart", (e) => {
-      e.stopPropagation();
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", "todo|" + item.id + "|" + t.id);
-      STATE.dragKind = "todo";
-      try{ e.dataTransfer.setDragImage(r, 10, 10); }catch(_){}
-      r.classList.add("dragging-note");
-    });
-    dragH.addEventListener("dragend", () => { STATE.dragKind = ""; r.classList.remove("dragging-note"); });
-    r.addEventListener("dragover", (e) => { if(STATE.dragKind === "todo"){ e.preventDefault(); e.stopPropagation(); r.classList.add("drop-target-note"); } });
-    r.addEventListener("dragleave", () => r.classList.remove("drop-target-note"));
-    r.addEventListener("drop", (e) => {
-      r.classList.remove("drop-target-note");
-      const parts = (e.dataTransfer.getData("text/plain") || "").split("|");
-      if(parts[0] !== "todo") return;
-      e.preventDefault(); e.stopPropagation();
-      moveTodoBefore(parts[1], parts[2], item.id, t.id);
-    });
+    r.dataset.itemId = item.id; r.dataset.todoId = t.id;
+    bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
     return r;
   };
   for(const t of all.filter(x => !x.done)) wrap.appendChild(buildRow(t));
@@ -2045,13 +2108,7 @@ function renderTodoItemsEditor(item){
     todoAddFocus = null;
     setTimeout(() => { try{ addText.focus(); }catch(e){} }, 0);
   }
-  add.addEventListener("dragover", (e) => { if(STATE.dragKind === "todo"){ e.preventDefault(); e.stopPropagation(); } });
-  add.addEventListener("drop", (e) => {
-    const parts = (e.dataTransfer.getData("text/plain") || "").split("|");
-    if(parts[0] !== "todo") return;
-    e.preventDefault(); e.stopPropagation();
-    moveTodoBefore(parts[1], parts[2], item.id, null);
-  });
+  add.dataset.itemId = item.id;
   wrap.appendChild(add);
   return wrap;
 }
@@ -2235,8 +2292,8 @@ function renderTodoTab(){
     const entry = el(`
       <div class="todo-entry">
         <div class="todo-entry-head" data-role="open" title="${isGeneral ? "" : "Open estate"}">
-          <span class="todo-drag todo-entry-drag" draggable="true" data-role="entry-drag" title="Drag to reorder">&#10303;</span>
-          ${titles ? `<span class="todo-entry-titles">${escapeHtml(titles)}</span> – ` : ""}<span class="todo-entry-name">${escapeHtml(item.name)}</span>${isGeneral ? `<span class="todo-entry-sub">not linked to an estate or title</span>` : ""}
+          <span class="todo-drag todo-entry-drag" data-role="entry-drag" title="Drag to reorder">&#10303;</span>
+          ${titles ? `<span class="todo-entry-titles" contenteditable="true" spellcheck="false" title="Click to edit this heading (clear it to go back to automatic)">${escapeHtml(titles)}</span> – ` : ""}<span class="todo-entry-name">${escapeHtml(item.name)}</span>${isGeneral ? `<span class="todo-entry-sub">not linked to an estate or title</span>` : ""}
           ${hd ? `<span class="pill ${hd < today ? "pill-late" : "pill-pending"}">${hd < today ? "follow-up overdue" : "follow up"} ${fmtDateShort(hd)}</span>` : ""}
           ${isGeneral ? "" : `<button class="btn btn-sm btn-ghost todo-entry-remove" data-role="entry-remove" title="Remove this whole entry from the To-Do page">Remove</button>`}
         </div>
@@ -2259,33 +2316,25 @@ function renderTodoTab(){
     });
     if(!isGeneral) entry.querySelector('[data-holder="items"]').before(liveNotes);
     entry.querySelector('[data-role="open"]').onclick = () => { if(isGeneral) return; STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+    const tEl = entry.querySelector(".todo-entry-titles");
+    if(tEl){
+      tEl.addEventListener("click", (e) => e.stopPropagation());
+      tEl.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); tEl.blur(); } });
+      tEl.addEventListener("blur", () => {
+        const typed = normalizeTitleHeading(item, (tEl.textContent || "").replace(/\s+/g, " ").trim());
+        if(typed.toUpperCase() === titles) return;
+        item.todoTitleLabel = typed;
+        recordChange(item.id, "item", item.id, item.name, "todoTitleLabel", "To-Do heading", titles, typed.toUpperCase());
+        scheduleSave();
+        renderOverviewInPlace();
+      });
+    }
     const er = entry.querySelector('[data-role="entry-remove"]');
     if(er) bindConfirmDelete(er, () => removeTodoEntry(item), "Remove", "Remove all?");
+    entry.dataset.itemId = item.id;
     const eh = entry.querySelector('[data-role="entry-drag"]');
     eh.addEventListener("click", (e) => e.stopPropagation());
-    eh.addEventListener("dragstart", (e) => {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", "entry|" + item.id);
-      STATE.dragKind = "entry";
-      try{ e.dataTransfer.setDragImage(entry, 10, 10); }catch(_){}
-      entry.classList.add("dragging-note");
-    });
-    eh.addEventListener("dragend", () => { STATE.dragKind = ""; entry.classList.remove("dragging-note"); });
-    entry.addEventListener("dragover", (e) => { if(STATE.dragKind === "entry"){ e.preventDefault(); entry.classList.add("drop-target-note"); } });
-    entry.addEventListener("dragleave", (e) => { if(e.target === entry) entry.classList.remove("drop-target-note"); });
-    entry.addEventListener("drop", (e) => {
-      entry.classList.remove("drop-target-note");
-      const parts = (e.dataTransfer.getData("text/plain") || "").split("|");
-      if(parts[0] !== "entry") return;
-      e.preventDefault();
-      const ids = rows.map(r => r.id);
-      const from = ids.indexOf(parts[1]), to = ids.indexOf(item.id);
-      if(from === -1 || to === -1 || from === to) return;
-      moveArrayItem(ids, from, from < to ? to + 1 : to);
-      STATE.data.todoOrder = ids;
-      scheduleSave();
-      renderOverviewInPlace();
-    });
+    bindPointerDrag(eh, entry, "entry", item.id, null);
     entry.querySelector('[data-holder="items"]').appendChild(renderTodoItemsEditor(item));
     list.appendChild(entry);
   }
@@ -2315,7 +2364,7 @@ function renderTodoTab(){
     const msg = add.querySelector("#todo-add-msg");
     const say = (t) => { msg.textContent = t; msg.style.display = t ? "" : "none"; };
     const resolve = (q) => {
-      const query = q.trim().toLowerCase();
+      const query = q.trim().toLowerCase().replace(/\s*[-\u2013\u2014]+\s+/g, " \u2014 ").replace(/\s+/g, " ");
       if(!query) return { item: general, title: "" };
       const exact = options.filter(o => o.label.toLowerCase() === query);
       const hits = exact.length ? exact : options.filter(o => o.label.toLowerCase().includes(query));
