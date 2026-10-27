@@ -217,6 +217,11 @@
   .title-card-updates{ margin-top:12px; }
   .title-card-head{ display:flex; align-items:flex-start; gap:12px; justify-content:space-between; }
   .title-card-name{ font-weight:700; font-size:14px; }
+  .title-card-link{ cursor:pointer; }
+  .title-card-link:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
+  .title-page-head{ margin:6px 0 18px; }
+  .title-page-name{ font-size:30px; font-weight:800; color:#2B6FAE; margin:0 0 2px; letter-spacing:-0.01em; }
+  .title-page-star{ color: var(--red); font-size:20px; vertical-align:middle; }
   .title-card-estate{ font-size:12px; color: var(--text-dim); cursor:pointer; margin-top:1px; }
   .title-card-estate:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
   .title-card-facts{ display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:8px; font-size:12px; color: var(--text-dim); }
@@ -254,8 +259,14 @@
   .todo-entry-remove{ margin-left:auto; font-size:11px; opacity:.6; }
   .todo-entry-remove:hover{ opacity:1; }
   .todo-entry-remove.armed{ background: var(--red-bg); color: var(--red); opacity:1; }
-  .todo-entry-titles{ outline:none; cursor:text; border-radius:3px; }
-  .todo-entry-titles:focus{ background: var(--panel-alt); box-shadow:0 0 0 2px var(--panel-alt); }
+  .todo-entry-titles{ outline:none; border-radius:3px; }
+  .todo-entry-titles.editing{ cursor:text; background: var(--panel-alt); box-shadow:0 0 0 2px var(--panel-alt); }
+  .todo-entry-titles .title-link{ cursor:pointer; }
+  .todo-entry-titles .title-link:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
+  .todo-title-edit{ background:none; border:none; color: var(--text-faint); cursor:pointer; font-size:11px; padding:2px 6px; opacity:0; transition:opacity .12s; margin-left:auto; }
+  .todo-title-edit + .todo-entry-remove{ margin-left:0; }
+  .todo-entry-head:hover .todo-title-edit, .todo-title-edit:focus{ opacity:.8; }
+  .todo-title-edit:hover{ opacity:1; color: var(--text); }
   body.is-dragging{ cursor:grabbing; user-select:none; -webkit-user-select:none; }
   .todo-drag{ cursor:grab; color: var(--text-faint); font-size:14px; line-height:1; align-self:flex-start; margin-top:4px; opacity:.55; user-select:none; flex:0 0 auto; }
   .todo-drag:hover{ opacity:1; color: var(--text-dim); }
@@ -634,6 +645,54 @@
   .access-gate-sub{ color: var(--text-dim); font-size:13px; margin-bottom:18px; }
   .access-gate-card .text-input{ text-align:center; }
   .access-gate-error{ color: var(--red); font-size:12px; margin-top:8px; }
+  /* Colour scheme: estate / title names red, everything else black; to-do text turns red only while Urgent */
+  .todo-entry-titles, .todo-entry-name, .title-card-name, .title-card-estate, .title-page-name{ color: var(--red); }
+  .todo-line, .todo-line-live, .todo-notes-live, .todo-eyebrow, .todo-lines, .progress-notes, .progress-text:not(.is-done){ color:#000; }
+  .todo-entry .todo-line, .todo-entry .todo-notes-live{ font-size:13px; }
+  .todo-item-row:not(.is-done) .todo-task-input{ color:#000; font-weight:700; }
+  .todo-item-row.is-urgent:not(.is-done) .todo-task-input{ color: var(--red); }
+  .todo-task-input a, .todo-eyebrow a, .todo-notes-live a, .todo-line a{ color:#000; text-decoration:underline; }
+  .todo-item-row.is-done .urgent-toggle{ display:none; }
+  .todo-item-row.is-done .todo-drag{ visibility:hidden; }
+  .todo-item-row.is-done .todo-eyebrow{ color: var(--text-faint); }
+  .note-square{ width:7px; height:7px; background:#000; border-radius:50%; flex:0 0 auto; margin:9px 5.5px 0 5.5px; }
+  .todo-item-row.is-note .todo-task-input{ font-weight:400 !important; color:#000 !important; }
+  .todo-add-modes{ display:inline-flex; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:8px; }
+  .todo-add-modes button{ background:none; border:none; padding:2px 12px; font-size:11px; font-family: var(--font-mono); cursor:pointer; color: var(--text-dim); }
+  .todo-add-modes button.on{ background:#000; color:#fff; }
+  .todo-collapse{ background:none; border:none; cursor:pointer; color: var(--text-faint); padding:2px 4px; line-height:0; align-self:center; transition:transform .15s; }
+  .todo-collapse:hover{ color: var(--text); }
+  .todo-entry.collapsed .todo-collapse{ transform:rotate(-90deg); }
+  .todo-entry.collapsed > :not(.todo-entry-head){ display:none; }
+  .todo-entry.collapsed{ padding-bottom:10px; }
+  .todo-entry-count{ display:none; font-weight:400; font-size:11px; color: var(--text-faint); margin-left:6px; }
+  .todo-entry.collapsed .todo-entry-count{ display:inline; }
+  /* Completed to-dos: one tight grey line, no strikethrough */
+  .todo-item-row.is-done{ padding-top:3px; padding-bottom:3px; align-items:center; }
+  .todo-item-row.is-done .todo-task-input{ text-decoration:none !important; color:#8a8a8a !important; font-weight:600; }
+  .todo-item-row.is-done .todo-task-input a{ color:#8a8a8a; }
+  .todo-item-row.is-done .todo-done{ background:#9a9a9a !important; border-color:#9a9a9a !important; color:#fff; margin-top:0; }
+  .todo-item-row.is-done .todo-eyebrow:empty{ display:none; }
+  .todo-item-row.is-done .todo-eyebrow{ color:#8a8a8a; padding:0; min-height:0; }
+  .todo-item-row.is-done .todo-lock, .todo-item-row.is-done .todo-remove{ align-self:center; margin-top:0; }
+  .todo-done-date{ margin:0 0 0 auto !important; flex:0 0 auto; }
+  .todo-done-date .step-note-date-input{ flex:0 0 130px; width:130px; }
+  .todo-done-date .date-field, .todo-done-date .date-field-display{ color:#8a8a8a; }
+  .todo-item-row.is-done .todo-text-row{ align-items:center; }
+  .todo-create-offer{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 10px; margin-top:6px; background: var(--panel-alt); border-radius:8px; color:#000; }
+  .todo-create-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .todo-create-or{ font-size:12px; color: var(--text-dim); }
+  .todo-create-select{ font-size:12px; padding:3px 6px; border:1px solid var(--border); border-radius:6px; background: var(--panel); max-width:240px; }
+  .todo-doc .doc-edit{ border-radius:3px; outline:none; cursor:text; }
+  .todo-doc .doc-edit:hover{ background: rgba(0,0,0,.05); }
+  .todo-doc .doc-edit:focus{ background: rgba(0,0,0,.06); box-shadow: 0 0 0 2px rgba(0,0,0,.25); }
+  .todo-doc .doc-edit{ display:inline; }
+  .todo-doc{ padding-right:190px; }
+  .doc-chip-bar{ position:absolute; right:8px; z-index:5; display:flex; align-items:center; gap:4px; }
+  .doc-date-input{ font:inherit; font-size:10px; line-height:1; padding:1px 4px; width:104px; border:0; border-radius:999px; background:rgba(0,0,0,.07); color:#444; }
+  .doc-type-chip{ display:inline-flex; align-items:center; gap:4px; font-size:10px; line-height:1; padding:2px 6px; border-radius:999px; border:0; background:rgba(0,0,0,.07); color:#444; cursor:pointer; }
+  .doc-type-chip:hover{ background:rgba(0,0,0,.14); color:#000; }
+  .doc-type-dot{ width:6px; height:6px; border-radius:50%; display:inline-block; }
 </style>
 
 </head>
@@ -1580,7 +1639,9 @@ function render(){
     if(STATE.pendingDecision) root.appendChild(renderDecisionCard());
     if(STATE.pendingKnockOn) root.appendChild(renderKnockOnCard());
 
-    if(STATE.view === "detail" && STATE.currentItemId){
+    if(STATE.view === "title" && STATE.currentTitle){
+      root.appendChild(renderTitlePage(STATE.currentTitle.itemId, STATE.currentTitle.title));
+    }else if(STATE.view === "detail" && STATE.currentItemId){
       root.appendChild(renderItemDetail(STATE.currentItemId));
     }else{
       const holder = el(`<div id="overview-holder"></div>`);
@@ -1606,7 +1667,7 @@ function renderTopbar(){
           </div>
         </div>
         <div class="nav-tabs">
-          <div class="nav-tab ${STATE.tab==='todo' ? 'active':''}" id="tab-todo">To-Do</div>
+          <div class="nav-tab ${STATE.tab==='todo' ? 'active':''}" id="tab-todo">Action List</div>
           <div class="nav-tab ${STATE.tab==='overview' ? 'active':''}" id="tab-overview">Estates</div>
           <div class="nav-tab ${STATE.tab==='titles' ? 'active':''}" id="tab-titles">Titles</div>
           <div class="nav-tab ${STATE.tab==='summary' ? 'active':''}" id="tab-summary">Progress Summary</div>
@@ -1772,11 +1833,33 @@ function migrateTodos(item){
   }
   item.todoTask = "";
 }
+let todoCollapsed = (function(){ try{ return new Set(JSON.parse(localStorage.getItem("pgr:actionCollapsed") || "[]")); }catch(e){ return new Set(); } })();
+function saveCollapsed(){ try{ localStorage.setItem("pgr:actionCollapsed", JSON.stringify(Array.from(todoCollapsed))); }catch(e){} }
 const todoAddOpen = new Set();
+const todoAddMode = new Map();
 let todoAddFocus = null;
 function openTodos(item){
   migrateTodos(item);
-  return item.todos.filter(t => !t.done && !richIsEmpty(t.text));
+  return item.todos.filter(t => !t.done && t.kind !== "note" && !richIsEmpty(t.text));
+}
+/** Completed to-dos stay on the Action List for two months after they were finished. */
+function isRecentDone(t){
+  const d = isValidDate(t.doneAt) ? t.doneAt : (isValidDate(t.createdAt) ? t.createdAt : todayISO());
+  return d >= addDaysISO(todayISO(), -60);
+}
+function recentDoneTodos(item){
+  migrateTodos(item);
+  return item.todos.filter(t => t.done && t.kind !== "note" && !richIsEmpty(t.text) && isRecentDone(t));
+}
+/** Where a note or completed to-do sits in the dated log: a note's own date (else the day it was written), or the day the to-do was finished. */
+function logDate(t){
+  if(t.kind === "note") return isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : "");
+  return isValidDate(t.doneAt) ? t.doneAt : (isValidDate(t.createdAt) ? t.createdAt : "");
+}
+/** Plain notes added under an estate or title (square bullet, no check box). */
+function openNotes(item){
+  migrateTodos(item);
+  return item.todos.filter(t => t.kind === "note" && !richIsEmpty(t.text));
 }
 function sortedTodos(list){
   // Urgent first; otherwise the order is whatever the user dragged them into.
@@ -1810,12 +1893,14 @@ function moveTodoBefore(fromItemId, todoId, toItemId, beforeTodoId){
   scheduleSave();
   render();
 }
-function addTodo(item, text, date, title){
+function addTodo(item, text, date, title, kind){
   const value = (text || "").trim();
   if(!value) return;
   migrateTodos(item);
-  item.todos.push({ id: uid("tk"), text: escapeHtml(value), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" });
-  recordChange(item.id, "item", item.id, item.name, "todoAdd", "To-do added", "", value);
+  const rec = { id: uid("tk"), text: escapeHtml(value), date: kind === "note" ? "" : (date || ""), notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
+  if(kind === "note") rec.kind = "note";
+  item.todos.push(rec);
+  recordChange(item.id, "item", item.id, item.name, kind === "note" ? "noteAdd" : "todoAdd", kind === "note" ? "Note added" : "To-do added", "", value);
   scheduleSave();
   render();
 }
@@ -1923,7 +2008,9 @@ function todoContactLines(item){
   return todoContactEntries(item).map(e => e.html);
 }
 function todoNoteLines(item){
-  return todoContactLines(item).concat(splitNoteLines(item.notes));
+  let out = todoContactLines(item).concat(splitNoteLines(item.notes));
+  for(const n of openNotes(item)){ out = out.concat(splitNoteLines(n.text)); out = out.concat(splitNoteLines(n.notes)); }
+  return out;
 }
 /** Heading shown for an estate on the To-Do page and in the Formatted view.
  *  1) a heading you typed yourself, 2) otherwise the titles its open to-dos are tagged to, 3) otherwise all its titles. */
@@ -1931,7 +2018,7 @@ function todoTitlesLabel(item){
   const own = stripTags(item.todoTitleLabel || "").trim();
   if(own) return own.toUpperCase();
   if(Array.isArray(item.todos)){
-    const open = item.todos.filter(t => !t.done && !richIsEmpty(t.text));
+    const open = item.todos.filter(t => !t.done && t.kind !== "note" && !richIsEmpty(t.text));
     if(open.length && open.every(t => t.title)){
       const tagged = new Set(open.map(t => t.title));
       const ordered = (item.titles && item.titles.length ? orderedTitleList(item) : []).filter(t => tagged.has(t));
@@ -2035,13 +2122,49 @@ function lockButtonHTML(t){
 }
 
 /** The editable list of to-dos for one estate (used on the To-Do page and on the estate page). */
-function renderTodoItemsEditor(item){
+function renderTodoItemsEditor(item, opts){
   migrateTodos(item);
+  const onlyTitle = opts && opts.title ? opts.title : "";
   const wrap = el(`<div class="todo-items"></div>`);
-  const all = sortedTodos(item.todos.filter(t => !richIsEmpty(t.text)));
-  const buildRow = (t) => {
+  const base = item.todos.filter(t => !richIsEmpty(t.text) && (!onlyTitle || !t.title || t.title === onlyTitle));
+  // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, oldest first.
+  const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
+  const logRows = base.map((t, i) => ({ t, i })).filter(x => x.t.kind === "note" || (x.t.done && isRecentDone(x.t)))
+    .sort((a, b) => { const da = logDate(a.t), db = logDate(b.t); return da < db ? -1 : da > db ? 1 : a.i - b.i; }).map(x => x.t);
+  const buildNoteRow = (t) => {
     const r = el(`
-      <div class="todo-item-row ${t.done ? "is-done" : ""} ${t.locked ? "is-locked" : ""}">
+      <div class="todo-item-row is-note ${t.locked ? "is-locked" : ""}">
+        <span class="todo-drag" title="Drag to reorder" data-role="drag">&#10303;</span>
+        <span class="note-square" aria-hidden="true"></span>
+        <div class="todo-item-main">
+          <div class="todo-text-row"><div class="todo-text-holder" data-holder="text"></div></div>
+          <div class="todo-item-notes" data-holder="notes"></div>
+          <div class="todo-item-sub"><input type="date" class="step-note-date-input" value="${isValidDate(t.date) ? t.date : ""}" data-role="date" ${t.locked ? "disabled" : ""} /></div>
+        </div>
+        ${lockButtonHTML(t)}
+        <button class="ec-remove todo-remove" title="${t.locked ? "Unlock to delete" : "Delete note"}" data-role="remove" ${t.locked ? "disabled" : ""}>&times;</button>
+      </div>
+    `);
+    const line = createRichTextLine(t.text || "", "Write a note…", "todo-task-input");
+    r.querySelector('[data-holder="text"]').appendChild(line);
+    bindCommitRich(line, v => updateTodo(item, t.id, "text", v));
+    const nDate = r.querySelector('[data-role="date"]');
+    wrapDateField(nDate, t.date, "Date (optional)");
+    nDate.onchange = (e) => updateTodo(item, t.id, "date", e.target.value || "");
+    const nNotes = createRichTextLine(t.notes || "", "Add a note…", "todo-eyebrow");
+    r.querySelector('[data-holder="notes"]').appendChild(nNotes);
+    bindCommitRich(nNotes, v => updateTodo(item, t.id, "notes", v));
+    if(t.locked){ line.contentEditable = "false"; nNotes.contentEditable = "false"; }
+    r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
+    bindConfirmDelete(r.querySelector('[data-role="remove"]'), () => removeTodo(item, t.id), "&times;");
+    r.dataset.itemId = item.id; r.dataset.todoId = t.id;
+    bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
+    return r;
+  };
+  const buildRow = (t) => {
+    if(t.kind === "note") return buildNoteRow(t);
+    const r = el(`
+      <div class="todo-item-row ${t.done ? "is-done" : ""} ${t.locked ? "is-locked" : ""} ${t.urgent ? "is-urgent" : ""}">
         <span class="todo-drag" title="Drag to reorder" data-role="drag">&#10303;</span>
         <button class="todo-done ${t.done ? "on" : ""}" data-role="done" title="${t.done ? "Mark not done" : "Mark done"}" ${t.locked ? "disabled" : ""}>${t.done ? "&#10003;" : ""}</button>
         <div class="todo-item-main">
@@ -2051,7 +2174,7 @@ function renderTodoItemsEditor(item){
           </div>
           <div class="todo-item-notes" data-holder="notes"></div>
           <div class="todo-item-sub">
-            <input type="date" class="step-note-date-input" value="${isValidDate(t.date) ? t.date : ""}" data-role="date" ${t.locked ? "disabled" : ""} />
+            <input type="date" class="step-note-date-input" value="${isValidDate(t.done ? t.doneAt : t.date) ? (t.done ? t.doneAt : t.date) : ""}" data-role="date" ${t.locked ? "disabled" : ""} />
           </div>
         </div>
         ${lockButtonHTML(t)}
@@ -2062,8 +2185,14 @@ function renderTodoItemsEditor(item){
     r.querySelector('[data-holder="text"]').appendChild(textLine);
     bindCommitRich(textLine, v => updateTodo(item, t.id, "text", v));
     const dateInput = r.querySelector('[data-role="date"]');
-    wrapDateField(dateInput, t.date, "Target date");
-    dateInput.onchange = (e) => updateTodo(item, t.id, "date", e.target.value || "");
+    if(t.done){  // compact: completion date sits to the right of the task, on the same line
+      const sb = r.querySelector(".todo-item-sub");
+      r.querySelector(".todo-text-row").appendChild(sb);
+      sb.classList.add("todo-done-date");
+    }
+    const dateKey = t.done ? "doneAt" : "date";
+    wrapDateField(dateInput, t.done ? t.doneAt : t.date, t.done ? "Completed date" : "Target date");
+    dateInput.onchange = (e) => updateTodo(item, t.id, dateKey, e.target.value || "");
     const notesLine = createRichTextLine(t.notes || "", "Add a note…", "todo-eyebrow");
     r.querySelector('[data-holder="notes"]').appendChild(notesLine);
     bindCommitRich(notesLine, v => updateTodo(item, t.id, "notes", v));
@@ -2080,13 +2209,16 @@ function renderTodoItemsEditor(item){
     bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
     return r;
   };
-  for(const t of all.filter(x => !x.done)) wrap.appendChild(buildRow(t));
+  for(const t of pendingRows.concat(logRows)) wrap.appendChild(buildRow(t));
 
   const isOpen = todoAddOpen.has(item.id);
   const add = el(`
     <div class="todo-add-wrap">
       <button class="todo-add-btn" data-role="add-toggle" type="button">+ Add</button>
       <div class="todo-add-form" ${isOpen ? "" : "hidden"}>
+        <div class="todo-add-modes">
+          <button type="button" data-mode="todo">To-do</button><button type="button" data-mode="note">Note</button>
+        </div>
         <input type="text" class="step-note-input" placeholder="Add a to-do…" data-role="add-text" />
         <div class="todo-add-form-row">
           <input type="date" class="step-note-date-input" data-role="add-date" />
@@ -2100,11 +2232,22 @@ function renderTodoItemsEditor(item){
   const addDate = add.querySelector('[data-role="add-date"]');
   wrapDateField(addDate, "", "Target date");
   const addText = add.querySelector('[data-role="add-text"]');
+  const dateWrap = addDate.closest(".date-field") || addDate;
+  let mode = todoAddMode.get(item.id) || "todo";
+  const applyMode = () => {
+    add.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === mode));
+    addText.placeholder = mode === "note" ? "Write a note…" : "Add a to-do…";
+    const disp = dateWrap.querySelector ? dateWrap.querySelector(".date-field-display.placeholder") : null;
+    if(disp) disp.textContent = mode === "note" ? "Date (optional)" : "Target date";
+    todoAddMode.set(item.id, mode);
+  };
+  add.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; applyMode(); addText.focus(); });
+  applyMode();
   const submit = () => {
     if(!addText.value.trim()) return;
     todoAddOpen.add(item.id);
     todoAddFocus = item.id;
-    addTodo(item, addText.value, addDate.value || "");
+    addTodo(item, addText.value, addDate.value || "", onlyTitle, mode);
   };
   add.querySelector('[data-role="add-toggle"]').onclick = () => {
     if(form.hidden){ form.hidden = false; todoAddOpen.add(item.id); addText.focus(); }
@@ -2157,7 +2300,7 @@ function buildProgressRow(item, t){
 /** Estate-page "Progress": the full history of this estate's to-dos, newest first. */
 function renderTodoProgressPanel(item){
   migrateTodos(item);
-  const all = item.todos.filter(t => !richIsEmpty(t.text));
+  const all = item.todos.filter(t => !richIsEmpty(t.text) && t.kind !== "note");
   const stamp = (t) => (t.done ? t.doneAt : t.createdAt) || "";
   all.sort((a, b) => stamp(a) < stamp(b) ? 1 : stamp(a) > stamp(b) ? -1 : 0);
   const panel = el(`<div class="panel"><div class="panel-head"><div><h2>Progress</h2></div></div><div class="panel-pad"><div id="progress-list"></div></div></div>`);
@@ -2170,40 +2313,386 @@ function renderTodoProgressPanel(item){
   return panel;
 }
 
-/** The finished layout: ■ TITLE – Estate / ○ notes / ■ red to-dos. Inline styles so it pastes into Word or email intact. */
-function buildTodoDocHTML(items, heading){
+/** The finished layout: ■ TITLE – Estate / ○ notes / ■ red to-dos. Inline styles so it pastes into Word or email intact.
+ *  With editable=true every line is a live text field (data-k says which stored field it feeds). */
+function buildTodoDocHTML(items, heading, editable){
   const RED = "#E0301E", INK = "#000000";
   const esc = escapeHtml;
+  // Wrap a piece of text as an editable field bound to stored data.
+  const fld = (k, attrs, inner) => editable ? `<span class="doc-edit" contenteditable="true" data-k="${k}" ${attrs}>${inner}</span>` : inner;
+  const dateTxt = (r) => isValidDate(r.date) ? ` (${esc(fmtDateShort(r.date))})` : "";
+  const subUl = (arr) => `<ul data-ul="sub" style="list-style-type:circle;padding-left:24px;margin:2px 0;color:${INK};">${lineLis(arr)}</ul>`;
+  const lineLis = (arr) => arr.map(x => `<li>${fld(x.k, x.attrs, x.html)}${x.after || ""}${x.sub && x.sub.length ? subUl(x.sub) : ""}</li>`).join("");
+  const pill = (t) => t.urgent ? `<span contenteditable="false" style="background:${RED};color:#FFFFFF;font-size:11px;font-weight:bold;padding:1px 7px;border-radius:9px;">URGENT</span> ` : "";
+  const todoLi = (item, t, margin) => {
+    const nl = splitNoteLines(t.notes).map(l => ({ k: "tnotes", attrs: `data-item="${item.id}" data-todo="${t.id}"`, html: l }));
+    let r = `<li style="${margin}color:${RED};">${pill(t)}${fld("todo", `data-item="${item.id}" data-todo="${t.id}"`, t.text)}${isValidDate(t.date) ? ` (${esc(fmtDateShort(t.date))})` : ""}`;
+    if(nl.length) r += subUl(nl);
+    return r + `</li>`;
+  };
   let h = (heading && stripTags(heading)) ? `<div style="font-weight:bold;margin:0 0 4px 0;color:${INK};">${heading}</div>` : "";
-  h += `<ul style="list-style-type:square;margin:0;padding-left:28px;color:${INK};">`;
+  h += `<ul data-ul="top" style="list-style-type:square;margin:0;padding-left:28px;color:${INK};">`;
   for(const item of items){
     if(item.id === GENERAL_ID){
-      for(const t of sortedTodos(openTodos(item))){
-        const nl = splitNoteLines(t.notes);
-        h += `<li style="margin:10px 0;color:${RED};">${t.urgent ? `<span style="background:${RED};color:#FFFFFF;font-size:11px;font-weight:bold;padding:1px 7px;border-radius:9px;">URGENT</span> ` : ""}${t.text}${isValidDate(t.date) ? ` (${esc(fmtDateShort(t.date))})` : ""}`;
-        if(nl.length) h += `<ul style="list-style-type:circle;padding-left:44px;margin:2px 0;color:${INK};">${nl.map(l => `<li>${l}</li>`).join("")}</ul>`;
-        h += `</li>`;
+      for(const n of openNotes(item)){
+        const tl = splitNoteLines(n.text), sl = splitNoteLines(n.notes).map(l => ({ k: "nnotes", attrs: `data-item="${item.id}" data-todo="${n.id}"`, html: l }));
+        tl.forEach((l, i) => { h += `<li style="margin:10px 0;color:${INK};">${fld("ntext", `data-item="${item.id}" data-todo="${n.id}"`, l)}${i === 0 ? dateTxt(n) : ""}${i === tl.length - 1 && sl.length ? subUl(sl) : ""}</li>`; });
       }
+      for(const t of sortedTodos(openTodos(item))) h += todoLi(item, t, "margin:10px 0;");
       continue;
     }
     const titles = todoTitlesLabel(item);
-    h += `<li style="margin:10px 0;">${titles ? esc(titles) + " - " : ""}${esc(item.name)}`;
-    const lines = todoNoteLines(item);
-    if(lines.length) h += `<ul style="list-style-type:circle;padding-left:44px;margin:2px 0;">${lines.map(l => `<li>${l}</li>`).join("")}</ul>`;
+    const headText = `${titles ? esc(titles) + " - " : ""}${esc(item.name)}`;
+    h += `<li data-entry="${item.id}" style="margin:10px 0;">${fld("head", `data-item="${item.id}"`, headText)}`;
+    // Note lines, each tagged with the field it came from.
+    const lines = [];
+    migrateEstateContacts(item);
+    for(const e of todoContactEntries(item)) lines.push({ k: "contact", attrs: `data-item="${item.id}" data-ec="${item.estateContacts.indexOf(e.ec)}"`, html: e.html });
+    for(const l of splitNoteLines(item.notes)) lines.push({ k: "inotes", attrs: `data-item="${item.id}"`, html: l });
+    for(const n of openNotes(item)){
+      splitNoteLines(n.text).forEach((l, i) => lines.push({ k: "ntext", attrs: `data-item="${item.id}" data-todo="${n.id}"`, html: l, after: i === 0 ? dateTxt(n) : "" }));
+      const sl = splitNoteLines(n.notes).map(l => ({ k: "nnotes", attrs: `data-item="${item.id}" data-todo="${n.id}"`, html: l }));
+      if(sl.length && lines.length && lines[lines.length - 1].attrs.includes(`data-todo="${n.id}"`) && lines[lines.length - 1].k === "ntext") lines[lines.length - 1].sub = sl;
+      else for(const x of sl) lines.push(x);
+    }
+    if(lines.length) h += `<ul data-ul="notes" style="list-style-type:circle;padding-left:24px;margin:2px 0;">${lineLis(lines)}</ul>`;
     const todos = sortedTodos(openTodos(item));
     if(todos.length){
-      h += `<ul style="list-style-type:square;padding-left:44px;margin:2px 0;">`;
-      for(const t of todos){
-        const noteLines = splitNoteLines(t.notes);
-        h += `<li style="color:${RED};">${t.urgent ? `<span style="background:${RED};color:#FFFFFF;font-size:11px;font-weight:bold;padding:1px 7px;border-radius:9px;">URGENT</span> ` : ""}${t.text}${isValidDate(t.date) ? ` (${esc(fmtDateShort(t.date))})` : ""}`;
-        if(noteLines.length) h += `<ul style="list-style-type:circle;padding-left:44px;margin:2px 0;color:${INK};">${noteLines.map(l => `<li>${l}</li>`).join("")}</ul>`;
-        h += `</li>`;
-      }
+      h += `<ul data-ul="todos" style="list-style-type:square;padding-left:24px;margin:2px 0;">`;
+      for(const t of todos) h += todoLi(item, t, "");
       h += `</ul>`;
     }
     h += `</li>`;
   }
   return h + `</ul>`;
+}
+
+/** Make the Formatted view editable: each line saves straight back into the stored data, so the
+ *  Working list, Estate pages and Title pages show the same text.
+ *  Return adds a new bullet after the current one (same kind); Tab on an empty new bullet switches note <-> to-do. */
+function bindFormattedEditing(docEl){
+  const RED = "#E0301E";
+  const findItem = (id) => id === GENERAL_ID ? getGeneralItem() : STATE.data.items.find(i => i.id === id);
+  const groupSel = (k, item, todo) => `[data-k="${k}"][data-item="${item}"]` + (todo ? `[data-todo="${todo}"]` : "");
+  const initial = new WeakMap();
+  const isRec = (k) => k === "todo" || k === "ntext" || k === "nnotes" || k === "tnotes";
+  const focusEnd = (f) => {
+    f.focus();
+    const r = document.createRange(); r.selectNodeContents(f); r.collapse(false);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  };
+  const dropRecord = (item, todoId) => { const i = (item.todos || []).findIndex(x => x.id === todoId); if(i > -1) item.todos.splice(i, 1); };
+  const discard = (f, focusPrev) => {
+    delete f.dataset.draft;   // so the blur fired by removing it does nothing
+    const item = findItem(f.dataset.item);
+    if(item && (f.dataset.k === "todo" || f.dataset.k === "ntext") && f.dataset.todo) dropRecord(item, f.dataset.todo);
+    const prev = Array.from(docEl.querySelectorAll("[data-k]")); const idx = prev.indexOf(f);
+    const li = f.closest("li"); if(li) li.remove();
+    if(focusPrev && idx > 0) focusEnd(prev[idx - 1]);
+    scheduleSave();
+  };
+  /** Build an empty bullet of the given kind ("todo" | "note" | "sub-notes" | "sub-todo-notes") after afterLi. */
+  const spawn = (f, kind) => {
+    const item = findItem(f.dataset.item);
+    if(!item) return null;
+    migrateTodos(item);
+    const afterLi = f.closest("li");
+    const isGen = item.id === GENERAL_ID;
+    let li, span;
+    const mk = (k, attrs) => { span = document.createElement("span"); span.className = "doc-edit"; span.contentEditable = "true"; span.dataset.k = k; span.dataset.item = item.id; for(const a in attrs) span.dataset[a] = attrs[a]; span.dataset.draft = "1"; li = document.createElement("li"); li.appendChild(span); };
+    if(kind === "tnotes" || kind === "nnotes" || kind === "inotes"){
+      mk(kind, kind === "inotes" ? {} : { todo: f.dataset.todo });
+      afterLi.after(li);
+    }else{
+      // Which array record are we after (for ordering) and which title to inherit.
+      const afterId = (afterLi.querySelector('[data-k="todo"],[data-k="ntext"]') || {}).dataset ? (afterLi.querySelector('[data-k="todo"],[data-k="ntext"]').dataset.todo) : "";
+      const afterRec = (item.todos || []).find(x => x.id === afterId);
+      const anyTodo = (item.todos || []).find(x => !x.done && x.kind !== "note" && x.title);
+      const rec = { id: uid("tk"), text: "", date: "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: kind === "todo" ? ((afterRec && afterRec.kind !== "note" ? afterRec.title : "") || (anyTodo ? anyTodo.title : "")) : "" };
+      if(kind === "note") rec.kind = "note";
+      const at = afterRec ? item.todos.indexOf(afterRec) + 1 : item.todos.length;
+      item.todos.splice(at, 0, rec);
+      mk(kind === "todo" ? "todo" : "ntext", { todo: rec.id });
+      if(isGen){
+        li.style.cssText = `margin:10px 0;color:${kind === "todo" ? RED : "#000"};`;
+        const top = docEl.querySelector('ul[data-ul="top"]');
+        const afterTop = afterLi && afterLi.parentElement === top;
+        if(afterTop) afterLi.after(li); else top.appendChild(li);
+      }else{
+        const entry = f.closest("li[data-entry]");
+        const want = kind === "todo" ? "todos" : "notes";
+        let ul = entry.querySelector(`:scope > ul[data-ul="${want}"]`);
+        if(!ul){
+          ul = document.createElement("ul"); ul.dataset.ul = want;
+          ul.style.cssText = `list-style-type:${want === "todos" ? "square" : "circle"};padding-left:24px;margin:2px 0;`;
+          const other = entry.querySelector(`:scope > ul[data-ul="todos"]`);
+          if(want === "notes" && other) other.before(ul); else entry.appendChild(ul);
+        }
+        if(kind === "todo") li.style.color = RED;
+        if(afterLi.parentElement === ul) afterLi.after(li); else ul.appendChild(li);
+      }
+    }
+    wire(span); initial.set(span, "");
+    return span;
+  };
+  /** Flip a bullet between note and to-do (data changes, then the whole page redraws from the data so every view agrees). */
+  const convertBullet = (f, force) => {
+    const k = f.dataset.k;
+    const item = findItem(f.dataset.item);
+    if(!item || !(k === "todo" || k === "ntext" || k === "inotes" || k === "contact" || k === "tnotes" || k === "nnotes")) return;
+    if(document.activeElement === f) f.blur();                 // commit any pending typing first
+    migrateTodos(item);
+    const anyTodo = (item.todos || []).find(x => !x.done && x.kind !== "note" && x.title);
+    let focusId = "";
+    if(k === "todo" || k === "ntext"){
+      const t = (item.todos || []).find(x => x.id === f.dataset.todo);
+      if(!t) return;
+      if(k === "todo"){ t.kind = "note"; }
+      else { delete t.kind; if(!t.title && anyTodo) t.title = anyTodo.title; }
+      recordChange(item.id, "item", item.id, item.name, "todoKind", "Changed type", k === "todo" ? "To-do" : "Note", k === "todo" ? "Note" : "To-do");
+      focusId = t.id;
+    }else{
+      // A sub-line (estate note, contact line, or a line under a to-do) becomes its own to-do.
+      const text = sanitizeRichHTML(f.innerHTML);
+      if(richIsEmpty(text)) return;
+      const li = f.closest("li");
+      let parentRec = null;
+      f.removeAttribute("data-k");   // so it no longer counts in its group
+      if(k === "inotes") item.notes = Array.from(docEl.querySelectorAll(groupSel("inotes", item.id, ""))).map(g => sanitizeRichHTML(g.innerHTML)).filter(x => !richIsEmpty(x)).join("<br>");
+      else if(k === "contact"){ const ec = (item.estateContacts || [])[+f.dataset.ec]; if(ec) ec.todoLine = ""; }
+      else{
+        parentRec = (item.todos || []).find(x => x.id === f.dataset.todo);
+        if(parentRec) parentRec.notes = Array.from(docEl.querySelectorAll(groupSel(k, item.id, f.dataset.todo))).map(g => sanitizeRichHTML(g.innerHTML)).filter(x => !richIsEmpty(x)).join("<br>");
+      }
+      if(li) li.remove();
+      const rec = { id: uid("tk"), text, date: "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: force === "note" ? "" : ((parentRec && parentRec.kind !== "note" ? parentRec.title : "") || (anyTodo ? anyTodo.title : "")) };
+      if(force === "note") rec.kind = "note";
+      const at = parentRec ? item.todos.indexOf(parentRec) + 1 : item.todos.length;
+      item.todos.splice(at, 0, rec);
+      recordChange(item.id, "item", item.id, item.name, force === "note" ? "noteAdd" : "todoAdd", force === "note" ? "Note added (from a sub-note)" : "To-do added (from a note line)", "", stripTags(text));
+      focusId = rec.id;
+    }
+    scheduleSave();
+    renderOverviewInPlace();
+    const nd = document.querySelector("#todo-doc");
+    const nf = nd && nd.querySelector(`[data-todo="${focusId}"][data-k="todo"], [data-todo="${focusId}"][data-k="ntext"]`);
+    if(nf) focusEnd(nf);
+  };
+  // Small chip beside the line you're on: shows its type and flips it.
+  const host = docEl.parentElement;
+  host.style.position = "relative";
+  const bar = document.createElement("div");
+  bar.className = "doc-chip-bar"; bar.style.display = "none";
+  const chip = document.createElement("button");
+  chip.type = "button"; chip.className = "doc-type-chip";
+  const dateIn = document.createElement("input");
+  dateIn.type = "date"; dateIn.className = "doc-date-input"; dateIn.title = "Optional date";
+  bar.appendChild(dateIn); bar.appendChild(chip);
+  host.appendChild(bar);
+  let chipFor = null;
+  chip.addEventListener("mousedown", (e) => e.preventDefault());
+  chip.addEventListener("click", () => { const f = chipFor; bar.style.display = "none"; if(f) convertBullet(f); });
+  dateIn.addEventListener("change", () => {
+    const f = chipFor; if(!f) return;
+    const item = findItem(f.dataset.item); if(!item) return;
+    const t = (item.todos || []).find(x => x.id === f.dataset.todo); if(!t) return;
+    const v = isValidDate(dateIn.value) ? dateIn.value : "";
+    if(v === (t.date || "")) return;
+    if(document.activeElement === f) f.blur();
+    recordChange(item.id, "item", item.id, item.name, "todoDate", "Date", t.date || "", v);
+    t.date = v; scheduleSave();
+    const id = t.id, k = f.dataset.k;
+    renderOverviewInPlace();
+    const nd = document.querySelector("#todo-doc");
+    const nf = nd && nd.querySelector(`[data-todo="${id}"][data-k="${k}"]`);
+    if(nf) focusEnd(nf);
+  });
+  docEl.addEventListener("focusin", (e) => {
+    const f = e.target.closest && e.target.closest("[data-k]");
+    if(!f || f.dataset.k === "head"){ bar.style.display = "none"; chipFor = null; return; }
+    chipFor = f;
+    const hasRec = f.dataset.k === "todo" || f.dataset.k === "ntext";
+    dateIn.style.display = hasRec ? "" : "none";
+    if(hasRec){ const it = findItem(f.dataset.item); const t = it && (it.todos || []).find(x => x.id === f.dataset.todo); dateIn.value = t && isValidDate(t.date) ? t.date : ""; }
+    const isTodo = f.dataset.k === "todo";
+    chip.innerHTML = `<span class="doc-type-dot" style="background:${isTodo ? RED : "#000"}"></span>${isTodo ? "To-do" : "Note"}`;
+    chip.title = `Click (or press Tab) to make this a ${isTodo ? "Note" : "To-do"}`;
+    bar.style.display = "";
+    const place = () => {
+      if(chipFor !== f || !f.isConnected) return;
+      const hr = host.getBoundingClientRect(), fr = (f.getClientRects()[0] || f.getBoundingClientRect());
+      const cr = bar.getBoundingClientRect();
+      // Centre the chip on the first line of this bullet.
+      const z = (host.offsetHeight ? hr.height / host.offsetHeight : 1) || 1;   // page zoom: rects are zoomed, CSS offsets are not
+      bar.style.top = Math.max(0, (fr.top - hr.top + (fr.height - cr.height) / 2) / z) + "px";
+    };
+    place(); requestAnimationFrame(place); setTimeout(place, 120);
+  });
+  const hideBar = () => setTimeout(() => { if(!docEl.contains(document.activeElement) && !bar.contains(document.activeElement)){ bar.style.display = "none"; chipFor = null; } }, 0);
+  docEl.addEventListener("focusout", hideBar);
+  bar.addEventListener("focusout", hideBar);
+  /** The note/to-do record behind a line, if any. */
+  const recOf = (f) => { const it = findItem(f.dataset.item); return it ? (it.todos || []).find(x => x.id === f.dataset.todo) : null; };
+  /** A new empty sub-bullet at the top of a record's sub-list. */
+  const addSubLine = (f) => {
+    const item = findItem(f.dataset.item), rec = recOf(f);
+    if(!item || !rec) return null;
+    const k = rec.kind === "note" ? "nnotes" : "tnotes";
+    const li = f.closest("li");
+    let ul = li.querySelector(':scope > ul[data-ul="sub"]');
+    if(!ul){ ul = document.createElement("ul"); ul.dataset.ul = "sub"; ul.style.cssText = "list-style-type:circle;padding-left:24px;margin:2px 0;color:#000;"; li.appendChild(ul); }
+    const span = document.createElement("span");
+    span.className = "doc-edit"; span.contentEditable = "true"; span.dataset.k = k; span.dataset.item = item.id; span.dataset.todo = rec.id; span.dataset.draft = "1";
+    const nli = document.createElement("li"); nli.appendChild(span);
+    ul.prepend(nli);
+    wire(span); initial.set(span, "");
+    return span;
+  };
+  /** Estate-note / contact line -> a note of its own (so it can carry sub-notes), then add an empty sub-bullet under it. */
+  const promoteThenSub = (pf) => {
+    const k = pf.dataset.k;
+    const item = findItem(pf.dataset.item);
+    if(!item) return;
+    const text = sanitizeRichHTML(pf.innerHTML);
+    if(richIsEmpty(text)) return;
+    migrateTodos(item);
+    pf.removeAttribute("data-k");
+    if(k === "inotes") item.notes = Array.from(docEl.querySelectorAll(groupSel("inotes", item.id, ""))).map(g => sanitizeRichHTML(g.innerHTML)).filter(x => !richIsEmpty(x)).join("<br>");
+    else { const ec = (item.estateContacts || [])[+pf.dataset.ec]; if(ec) ec.todoLine = ""; }
+    const rec = { id: uid("tk"), text, date: "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: "", kind: "note" };
+    item.todos.push(rec);
+    recordChange(item.id, "item", item.id, item.name, "noteAdd", "Note added (from an estate note line)", "", stripTags(text));
+    scheduleSave();
+    renderOverviewInPlace();
+    const nd = document.querySelector("#todo-doc");
+    const nf = nd && nd.querySelector(`[data-todo="${rec.id}"][data-k="ntext"]`);
+    if(nf){ const n = nd.__addSub && nd.__addSub(nf); if(n) focusEnd(n); else focusEnd(nf); }
+  };
+  /** Tab on an EMPTY new bullet (as in Word / Google Docs): indent it under the bullet above, making it a sub-bullet. */
+  const indentEmpty = (f) => {
+    const li = f.closest("li"), prevLi = li && li.previousElementSibling;
+    const pf = prevLi && prevLi.querySelector(":scope > [data-k]");
+    if(!pf || pf.dataset.k === "head") return;
+    const pk = pf.dataset.k;
+    if(pk === "todo" || pk === "ntext"){
+      discard(f, false);
+      const n = addSubLine(pf); if(n) focusEnd(n);
+    }else if(pk === "inotes" || pk === "contact"){
+      discard(f, false);
+      promoteThenSub(pf);
+    }
+  };
+  /** Shift+Tab: on an empty sub-bullet, pop it back out to a normal bullet after its parent; on a filled one, lift it out as its own bullet. */
+  const outdentSub = (f) => {
+    const parent = recOf(f);
+    if(!parent) return;
+    const kind = parent.kind === "note" ? "note" : "todo";
+    if(richIsEmpty(f.innerHTML)){
+      const parentLi = f.closest("li").parentElement.closest("li");
+      const pf = parentLi && parentLi.querySelector(':scope > [data-k="todo"], :scope > [data-k="ntext"]');
+      discard(f, false);
+      if(pf){ const n = spawn(pf, kind); if(n) focusEnd(n); }
+      return;
+    }
+    convertBullet(f, kind);
+  };
+  const kindOf = (f) => {
+    const k = f.dataset.k;
+    if(k === "todo") return "todo";
+    if(k === "tnotes" || k === "nnotes") return k;
+    if(k === "inotes" || k === "contact") return "inotes";
+    if(k === "ntext") return "note";
+    return "";
+  };
+  function wire(f){
+    initial.set(f, f.innerHTML);
+    f.addEventListener("keydown", (e) => {
+      const empty = richIsEmpty(f.innerHTML);
+      if(e.key === "Enter"){
+        e.preventDefault();
+        if(e.altKey || e.shiftKey){ document.execCommand("insertLineBreak"); return; }
+        if(f.dataset.k === "head"){ f.blur(); return; }
+        if(empty){ if(f.dataset.draft) discard(f, true); else f.blur(); return; }
+        const kind = kindOf(f);
+        if(!kind){ f.blur(); return; }
+        const n = spawn(f, kind);
+        if(n) focusEnd(n); else f.blur();
+        return;
+      }
+      if(e.key === "Tab"){
+        e.preventDefault();
+        const k = f.dataset.k;
+        if(e.shiftKey){ if(k === "tnotes" || k === "nnotes") outdentSub(f); return; }
+        if(k === "head" || k === "tnotes" || k === "nnotes") return;
+        if(empty && f.dataset.draft) indentEmpty(f);     // only an empty new bullet indents
+        return;
+      }
+      if(e.key === "Backspace" && f.dataset.draft && empty){ e.preventDefault(); discard(f, true); return; }
+      if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); insertLinkAtSelection(f); }
+    });
+    f.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const txt = (e.clipboardData || window.clipboardData).getData("text/plain").replace(/\r?\n/g, " ");
+      document.execCommand("insertText", false, txt);
+    });
+    f.addEventListener("blur", () => {
+      const k = f.dataset.k, item = findItem(f.dataset.item);
+      if(!item || !f.isConnected) return;
+      if(f.dataset.draft && richIsEmpty(f.innerHTML)){ discard(f, false); return; }
+      const clean = k === "head" ? "" : sanitizeRichHTML(f.innerHTML);
+      if(k === "head"){
+        const raw = f.textContent.replace(/\s+/g, " ").trim();
+        if(!raw){ f.innerHTML = initial.get(f); return; }
+        const m = raw.match(/^(.+?)\s+[-–—]+\s+(.+)$/);
+        const label = m ? m[1].trim() : "", name = m ? m[2].trim() : raw;
+        if(m && label.toUpperCase() !== todoTitlesLabel(item)){
+          const v = normalizeTitleHeading(item, label);
+          recordChange(item.id, "item", item.id, item.name, "todoTitleLabel", "Action List heading", item.todoTitleLabel || "", v);
+          item.todoTitleLabel = v;
+        }
+        if(name !== item.name){
+          recordChange(item.id, "item", item.id, item.name, "name", "Name", item.name, name);
+          item.name = name;
+        }
+        initial.set(f, f.innerHTML); scheduleSave(); return;
+      }
+      const wasDraft = !!f.dataset.draft;
+      if(!wasDraft && clean === sanitizeRichHTML(initial.get(f))) return;
+      if(k === "todo"){
+        const t = (item.todos || []).find(x => x.id === f.dataset.todo);
+        if(!t) return;
+        if(richIsEmpty(clean)){ f.innerHTML = initial.get(f); return; }   // can't blank a to-do here; use ✕ on the Working list
+        recordChange(item.id, "item", item.id, item.name, wasDraft ? "todoAdd" : "todoText", wasDraft ? "To-do added" : "To-do text", String(t.text || ""), clean);
+        t.text = clean; delete f.dataset.draft; initial.set(f, f.innerHTML); scheduleSave(); return;
+      }
+      if(k === "contact"){
+        const ec = (item.estateContacts || [])[+f.dataset.ec];
+        if(!ec) return;
+        ec.todoLine = stripTags(clean).trim() ? clean : "";
+        if(!ec.todoLine) (f.closest("li") || f).remove();
+        else initial.set(f, f.innerHTML);
+        scheduleSave(); return;
+      }
+      // Multi-line fields: the lines of one field are joined back together (a cleared line is deleted).
+      const todoId = f.dataset.todo || "";
+      const group = Array.from(docEl.querySelectorAll(groupSel(k, f.dataset.item, todoId)));
+      const parts = group.map(g => sanitizeRichHTML(g.innerHTML)).filter(x => !richIsEmpty(x));
+      const joined = parts.join("<br>");
+      if(k === "inotes") item.notes = joined;
+      else{
+        const t = (item.todos || []).find(x => x.id === todoId);
+        if(!t) return;
+        if(k === "ntext") t.text = joined;
+        else t.notes = joined;       // nnotes, tnotes
+      }
+      recordChange(item.id, "item", item.id, item.name, wasDraft && k === "ntext" ? "noteAdd" : "formattedEdit", wasDraft && k === "ntext" ? "Note added" : "Edited in Formatted view", "", stripTags(clean));
+      group.forEach(g => { if(g === f) delete g.dataset.draft; if(g.dataset.draft) return;   // a freshly spawned empty bullet in this group stays put
+        initial.set(g, g.innerHTML); if(richIsEmpty(g.innerHTML)){ const li = g.closest("li"), ul = li && li.parentElement; if(li) li.remove(); if(ul && ul.dataset.ul === "sub" && !ul.children.length) ul.remove(); } });
+      scheduleSave();
+    });
+  }
+  docEl.querySelectorAll("[data-k]").forEach(wire);
+  docEl.__addSub = addSubLine;
 }
 
 /** Take an estate off the To-Do page: deletes its open to-dos and dismisses its hold follow-up (the estate itself is untouched). */
@@ -2221,13 +2710,33 @@ function renderTodoTab(){
   const view = STATE.todoView || "list";
   const head = el(`
     <div class="page-head">
-      <div><h1 class="page-title">To-Do</h1></div>
+      <div><h1 class="page-title">Action List</h1></div>
       <div class="todo-view-toggle">
         <button class="btn btn-sm ${view === "list" ? "" : "btn-ghost"}" data-view="list">Working list</button>
         <button class="btn btn-sm ${view === "formatted" ? "" : "btn-ghost"}" data-view="formatted">Formatted</button>
       </div>
     </div>
   `);
+  const syncCollapseAll = () => {
+    const btn = head.querySelector("#todo-collapse-all");
+    if(!btn) return;
+    const ents = Array.from(document.querySelectorAll(".todo-entry"));
+    btn.textContent = ents.length && ents.every(x => x.classList.contains("collapsed")) ? "Expand all" : "Collapse all";
+  };
+  if(view === "list"){
+    const ca = el(`<button class="btn btn-sm btn-ghost" id="todo-collapse-all" type="button" style="margin-right:8px;">Collapse all</button>`);
+    head.querySelector(".todo-view-toggle").prepend(ca);
+    ca.onclick = () => {
+      const ents = Array.from(document.querySelectorAll(".todo-entry"));
+      const collapse = !ents.every(x => x.classList.contains("collapsed"));
+      for(const x of ents){
+        x.classList.toggle("collapsed", collapse);
+        if(collapse) todoCollapsed.add(x.dataset.itemId); else todoCollapsed.delete(x.dataset.itemId);
+      }
+      saveCollapsed(); syncCollapseAll();
+    };
+    setTimeout(syncCollapseAll, 0);
+  }
   head.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { STATE.todoView = b.dataset.view; renderOverviewInPlace(); });
   wrap.appendChild(head);
 
@@ -2240,19 +2749,19 @@ function renderTodoTab(){
   const order = Array.isArray(STATE.data.todoOrder) ? STATE.data.todoOrder : [];
   const ordIdx = (i) => { const k = order.indexOf(i.id); return k === -1 ? 1e9 : k; };
   const rows = open.concat([general])
-    .filter(i => i.id === GENERAL_ID || openTodos(i).length || holdDate(i))
+    .filter(i => i.id === GENERAL_ID || openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i))
     .sort((a, b) => {
+      // Urgent first, then General, then everything else alphabetically by title / estate.
       if(hasUrgent(a) !== hasUrgent(b)) return hasUrgent(a) ? -1 : 1;
-      const d = ordIdx(a) - ordIdx(b);
-      if(d) return d;
+      if((a.id === GENERAL_ID) !== (b.id === GENERAL_ID)) return a.id === GENERAL_ID ? -1 : 1;
       return (todoTitlesLabel(a) || a.name).localeCompare(todoTitlesLabel(b) || b.name);
     });
 
   if(view === "formatted"){
-    const withTodos = rows.filter(i => openTodos(i).length);
+    const withTodos = rows.filter(i => openTodos(i).length || openNotes(i).length);
     const panel = el(`
       <div class="panel">
-        <div class="panel-head"><div><h2>Formatted</h2></div><div><span class="todo-copy-msg" id="todo-copy-msg"></span> <button class="btn btn-sm" id="todo-copy">Copy</button></div></div>
+        <div class="panel-head"><div><h2>Formatted</h2></div><div><span class="todo-copy-msg" id="todo-copy-msg"></span> <button class="btn btn-sm" id="todo-pdf" title="Opens the print dialog: choose Save as PDF, or print directly">PDF / Print</button> <button class="btn btn-sm" id="todo-copy">Copy</button></div></div>
         <div class="panel-pad"><div id="todo-heading-holder" class="todo-heading-holder"></div><div class="todo-doc" id="todo-doc"></div></div>
       </div>
     `);
@@ -2260,13 +2769,42 @@ function renderTodoTab(){
     const headingLine = createRichTextLine(STATE.data.todoHeading || "", "Heading (optional) — e.g. Rights Available:", "todo-heading-input");
     panel.querySelector("#todo-heading-holder").appendChild(headingLine);
     bindCommitRich(headingLine, v => { STATE.data.todoHeading = v; scheduleSave(); renderOverviewInPlace(); });
-    if(withTodos.length) docEl.innerHTML = buildTodoDocHTML(withTodos);
+    if(withTodos.length){ docEl.innerHTML = buildTodoDocHTML(withTodos, "", true); bindFormattedEditing(docEl); }
     else docEl.appendChild(el(`<div class="section-note">No open to-dos yet.</div>`));
+    if(withTodos.length) panel.querySelector(".panel-pad").appendChild(el(`<div class="section-note" style="margin-top:12px;">Click any line to edit. Return adds a new bullet below (same kind). On an empty new bullet, Tab indents it into a sub-bullet (Shift+Tab undoes it). The chip beside the line you’re on flips it between note and to-do. The date box beside it sets an optional date. Option+Return = line break within a bullet.</div>`));
     const msg = panel.querySelector("#todo-copy-msg");
+    const cleanedDoc = () => {
+      const c = docEl.cloneNode(true);
+      c.querySelectorAll("[data-k]").forEach(f => { for(const a of Array.from(f.attributes)) if(a.name !== "style") f.removeAttribute(a.name); });
+      c.querySelectorAll("[contenteditable]").forEach(f => f.removeAttribute("contenteditable"));
+      c.querySelectorAll("[data-ul],[data-entry]").forEach(f => { f.removeAttribute("data-ul"); f.removeAttribute("data-entry"); });
+      return c.innerHTML;
+    };
+    panel.querySelector("#todo-pdf").onclick = () => {
+      const hd = stripTags(STATE.data.todoHeading) ? `<div style="font-weight:bold;font-size:15pt;margin:0 0 10pt 0;">${STATE.data.todoHeading}</div>` : "";
+      const page = `<!doctype html><html><head><meta charset="utf-8"><title>Action List</title><style>
+        @page { size: Letter; margin: 0.8in 0.9in; }
+        html, body { margin:0; padding:0; background:#fff; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size:12pt; line-height:1.45; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        ul { margin:0; }
+        li { break-inside:avoid; page-break-inside:avoid; }
+        a { color:inherit; }
+      </style></head><body>${hd}${cleanedDoc()}</body></html>`;
+      const old = document.getElementById("todo-print-frame"); if(old) old.remove();
+      const fr = document.createElement("iframe");
+      fr.id = "todo-print-frame";
+      fr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+      fr.srcdoc = page;
+      fr.onload = () => { try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ msg.textContent = "Printing isn't available here"; setTimeout(() => { msg.textContent = ""; }, 3000); } };
+      document.body.appendChild(fr);
+    };
     panel.querySelector("#todo-copy").onclick = async () => {
       const hdText = stripTags(STATE.data.todoHeading);
       const hdHtml = hdText ? `<div style="font-weight:bold;margin:0 0 4px 0;">${STATE.data.todoHeading}</div>` : "";
-      const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;">${hdHtml}${docEl.innerHTML}</div>`;
+      const cleanDoc = docEl.cloneNode(true);
+      cleanDoc.querySelectorAll("[data-k]").forEach(f => { for(const a of Array.from(f.attributes)) if(a.name !== "style") f.removeAttribute(a.name); });
+      cleanDoc.querySelectorAll("[contenteditable]").forEach(f => f.removeAttribute("contenteditable"));
+      const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;">${hdHtml}${cleanDoc.innerHTML}</div>`;
       try{
         await navigator.clipboard.write([new ClipboardItem({
           "text/html": new Blob([html], { type: "text/html" }),
@@ -2299,12 +2837,14 @@ function renderTodoTab(){
     const lines = isGeneral ? [] : todoContactEntries(item);
     const hd = holdDate(item);
     const entry = el(`
-      <div class="todo-entry">
+      <div class="todo-entry ${todoCollapsed.has(item.id) ? "collapsed" : ""}">
         <div class="todo-entry-head" data-role="open" title="${isGeneral ? "" : "Open estate"}">
-          <span class="todo-drag todo-entry-drag" data-role="entry-drag" title="Drag to reorder">&#10303;</span>
-          ${titles ? `<span class="todo-entry-titles" contenteditable="true" spellcheck="false" title="Click to edit this heading (clear it to go back to automatic)">${escapeHtml(titles)}</span> – ` : ""}<span class="todo-entry-name">${escapeHtml(item.name)}</span>${isGeneral ? `<span class="todo-entry-sub">not linked to an estate or title</span>` : ""}
+          <button class="todo-collapse" type="button" data-role="collapse" title="Collapse / expand"><svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg></button>
+          ${titles ? `<span class="todo-entry-titles" spellcheck="false"></span> – ` : ""}<span class="todo-entry-name">${escapeHtml(item.name)}</span>${isGeneral ? `<span class="todo-entry-sub">not linked to an estate or title</span>` : ""}
+          <span class="todo-entry-count">${openTodos(item).length ? openTodos(item).length + " to-do" + (openTodos(item).length > 1 ? "s" : "") : ""}${openTodos(item).length && openNotes(item).length ? ", " : ""}${openNotes(item).length ? openNotes(item).length + " note" + (openNotes(item).length > 1 ? "s" : "") : ""}</span>
           ${hd ? `<span class="pill ${hd < today ? "pill-late" : "pill-pending"}">${hd < today ? "follow-up overdue" : "follow up"} ${fmtDateShort(hd)}</span>` : ""}
-          ${isGeneral ? "" : `<button class="btn btn-sm btn-ghost todo-entry-remove" data-role="entry-remove" title="Remove this whole entry from the To-Do page">Remove</button>`}
+          ${titles ? `<button class="todo-title-edit" type="button" title="Edit this heading (clear it to go back to automatic)">&#9998; Edit heading</button>` : ""}
+          ${isGeneral ? "" : `<button class="btn btn-sm btn-ghost todo-entry-remove" data-role="entry-remove" title="Remove this whole entry from the Action List">Remove</button>`}
         </div>
         <div class="todo-lines"></div>
         <div data-holder="items"></div>
@@ -2351,11 +2891,50 @@ function renderTodoTab(){
     entry.querySelector('[data-role="open"]').onclick = () => { if(isGeneral) return; STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
     const tEl = entry.querySelector(".todo-entry-titles");
     if(tEl){
-      tEl.addEventListener("click", (e) => e.stopPropagation());
-      tEl.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); tEl.blur(); } });
+      const known = (item.titles || []).filter(t => stripTags(t));
+      const paintLinks = () => {
+        tEl.textContent = "";
+        tEl.contentEditable = "false";
+        const parts = titles.split(" / ");
+        parts.forEach((part, i) => {
+          if(i) tEl.appendChild(document.createTextNode(" / "));
+          const match = known.find(t => stripTags(t).trim().toUpperCase() === part.trim().toUpperCase());
+          const sp = document.createElement("span");
+          sp.textContent = part;
+          if(match){
+            sp.className = "title-link";
+            sp.title = "Open title page";
+            sp.addEventListener("click", (e) => { e.stopPropagation(); openTitlePage(item, match); });
+          }
+          tEl.appendChild(sp);
+        });
+      };
+      paintLinks();
+      const editBtn = entry.querySelector(".todo-title-edit");
+      let cancelled = false;
+      const startEdit = (e) => {
+        if(e) e.stopPropagation();
+        cancelled = false;
+        tEl.textContent = titles;
+        tEl.contentEditable = "true";
+        tEl.classList.add("editing");
+        tEl.focus();
+        const r = document.createRange(); r.selectNodeContents(tEl);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      };
+      editBtn.addEventListener("click", startEdit);
+      tEl.addEventListener("dblclick", startEdit);
+      tEl.addEventListener("keydown", (e) => {
+        if(!tEl.classList.contains("editing")) return;
+        if(e.key === "Enter"){ e.preventDefault(); tEl.blur(); }
+        if(e.key === "Escape"){ e.preventDefault(); cancelled = true; tEl.blur(); }
+      });
       tEl.addEventListener("blur", () => {
+        if(!tEl.classList.contains("editing")) return;
+        tEl.classList.remove("editing");
+        if(cancelled){ paintLinks(); return; }
         const typed = normalizeTitleHeading(item, (tEl.textContent || "").replace(/\s+/g, " ").trim());
-        if(typed.toUpperCase() === titles) return;
+        if(typed.toUpperCase() === titles){ paintLinks(); return; }
         item.todoTitleLabel = typed;
         recordChange(item.id, "item", item.id, item.name, "todoTitleLabel", "To-Do heading", titles, typed.toUpperCase());
         scheduleSave();
@@ -2365,9 +2944,14 @@ function renderTodoTab(){
     const er = entry.querySelector('[data-role="entry-remove"]');
     if(er) bindConfirmDelete(er, () => removeTodoEntry(item), "Remove", "Remove all?");
     entry.dataset.itemId = item.id;
-    const eh = entry.querySelector('[data-role="entry-drag"]');
-    eh.addEventListener("click", (e) => e.stopPropagation());
-    bindPointerDrag(eh, entry, "entry", item.id, null);
+    const colBtn = entry.querySelector('[data-role="collapse"]');
+    colBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const now = entry.classList.toggle("collapsed");
+      if(now) todoCollapsed.add(item.id); else todoCollapsed.delete(item.id);
+      saveCollapsed();
+      syncCollapseAll();
+    });
     entry.querySelector('[data-holder="items"]').appendChild(renderTodoItemsEditor(item));
     list.appendChild(entry);
   }
@@ -2387,7 +2971,7 @@ function renderTodoTab(){
     const add = el(`
       <div>
         <div class="step-note-add todo-add">
-          <input type="text" class="step-note-input todo-add-estate" id="todo-add-estate" list="todo-add-list" placeholder="Estate or title (blank = General)…" autocomplete="off" />
+          <input type="text" class="step-note-input todo-add-estate" id="todo-add-estate" list="todo-add-list" placeholder="Estate or title (blank = General, or type a new one)…" autocomplete="off" />
           <input type="text" class="step-note-input" id="todo-add-text" placeholder="Add a to-do…" />
         </div>
         <div class="todo-add-msg section-note" id="todo-add-msg" style="display:none;"></div>
@@ -2406,15 +2990,62 @@ function renderTodoTab(){
       if(!ids.length) return { err: "No estate or title matches that." };
       return { err: "That matches more than one estate — keep typing and pick one from the list." };
     };
+    // Nothing matched: offer to create the estate and/or title right here.
+    const offerCreate = (raw, text) => {
+      const typed = raw.trim();
+      msg.innerHTML = ""; msg.style.display = "";
+      const finish = (item, title) => {
+        if(text) addTodo(item, text, "", title || "");
+        else { scheduleSave(); render(); }
+      };
+      const sepMatch = typed.match(/^(.+?)\s+[-\u2013\u2014]+\s+(.+)$/);
+      const findEstate = (name) => {
+        const q = name.trim().toLowerCase();
+        const exact = open.filter(i => i.name.toLowerCase() === q);
+        if(exact.length === 1) return exact[0];
+        const part = open.filter(i => i.name.toLowerCase().includes(q));
+        return part.length === 1 ? part[0] : null;
+      };
+      const row = (label, onClick) => {
+        const b = el(`<button class="btn btn-sm" type="button">${escapeHtml(label)}</button>`);
+        b.onclick = onClick; return b;
+      };
+      const box = el(`<div class="todo-create-offer"></div>`);
+      if(sepMatch){
+        const tName = sepMatch[1].trim(), eName = sepMatch[2].trim();
+        const est = findEstate(eName);
+        if(est){
+          box.appendChild(el(`<div>No title called “${escapeHtml(tName)}” on ${escapeHtml(est.name)} yet.</div>`));
+          box.appendChild(row(`Create title “${tName}” on ${est.name}` + (text ? " and add the to-do" : ""), () => { const t = attachTitleRecord(est, tName); finish(est, t); }));
+        }else{
+          box.appendChild(el(`<div>No estate called “${escapeHtml(eName)}” yet.</div>`));
+          box.appendChild(row(`Create estate “${eName}” with title “${tName}”` + (text ? " and add the to-do" : ""), () => { const e2 = createEstateRecord(eName); const t = attachTitleRecord(e2, tName); finish(e2, t); }));
+        }
+      }else{
+        box.appendChild(el(`<div>“${escapeHtml(typed)}” isn’t an estate or title yet. Create it as:</div>`));
+        const line = el(`<div class="todo-create-row"></div>`);
+        line.appendChild(row(`New estate “${typed}”`, () => { const e2 = createEstateRecord(typed); finish(e2, ""); }));
+        const sel = el(`<select class="todo-create-select">${open.slice().sort((a, b) => a.name.localeCompare(b.name)).map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join("")}</select>`);
+        line.appendChild(el(`<span class="todo-create-or">or new title on</span>`));
+        line.appendChild(sel);
+        line.appendChild(row("Create title", () => { const est = open.find(i => i.id === sel.value); if(!est) return; const t = attachTitleRecord(est, typed); finish(est, t); }));
+        box.appendChild(line);
+      }
+      const cancel = el(`<button class="btn btn-sm btn-ghost" type="button">Cancel</button>`);
+      cancel.onclick = () => say("");
+      box.appendChild(cancel);
+      msg.appendChild(box);
+    };
     const doAdd = () => {
       const text = add.querySelector("#todo-add-text").value.trim();
       const r = resolve(add.querySelector("#todo-add-estate").value);
+      if(r.err === "No estate or title matches that."){ offerCreate(add.querySelector("#todo-add-estate").value, text); return; }
       if(r.err){ say(r.err); return; }
       if(!text){ say("Write the to-do text first."); return; }
       addTodo(r.item, text, "", r.title);
     };
     for(const id of ["#todo-add-text", "#todo-add-estate"]){
-      add.querySelector(id).addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); if(id === "#todo-add-estate") add.querySelector("#todo-add-text").focus(); else doAdd(); } });
+      add.querySelector(id).addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); if(id === "#todo-add-estate"){ const rr = resolve(add.querySelector("#todo-add-estate").value); if(rr.err === "No estate or title matches that.") offerCreate(add.querySelector("#todo-add-estate").value, add.querySelector("#todo-add-text").value.trim()); else add.querySelector("#todo-add-text").focus(); } else doAdd(); } });
     }
     panel.querySelector(".panel-pad").appendChild(add);
   }
@@ -2448,14 +3079,14 @@ function renderTitleCard(item, title){
   ].map(([k, v]) => [k, stripTags(v)]).filter(([, v]) => v);
   // To-dos for this title: ones tagged to it, plus estate-level ones with no title.
   const todos = item.todos
-    .filter(t => !richIsEmpty(t.text) && (!t.title || t.title === title))
+    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && (!t.title || t.title === title))
     .sort((a, b) => {
       const sa = (a.done ? a.doneAt : a.createdAt) || "", sb = (b.done ? b.doneAt : b.createdAt) || "";
       return sa < sb ? 1 : sa > sb ? -1 : 0;
     });
   const card = el(`
     <div class="title-card">
-      <div class="title-card-name">${escapeHtml(stripTags(title))}</div>
+      <div class="title-card-name title-card-link" data-role="open-title" title="Open title page">${escapeHtml(stripTags(title))}</div>
       <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
       ${facts.length ? `<div class="title-card-facts">${facts.map(([k, v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div>` : ""}
       ${stripTags(td.logline) ? `<div class="title-card-logline">${td.logline}</div>` : ""}
@@ -2464,6 +3095,7 @@ function renderTitleCard(item, title){
     </div>
   `);
   card.querySelector('[data-role="open"]').onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+  card.querySelector('[data-role="open-title"]').onclick = () => openTitlePage(item, title);
   const upd = card.querySelector(".title-card-updates");
   if(todos.length){
     upd.appendChild(el(`<div class="todo-done-label">Updates &amp; progress</div>`));
@@ -2472,6 +3104,127 @@ function renderTitleCard(item, title){
     upd.remove();
   }
   return card;
+}
+/* ---- Title page: everything about one title --------------------------- */
+function buildContactLinesBox(item){
+  const box = document.createElement("div");
+  box.className = "todo-lines";
+  const entries = todoContactEntries(item);
+  for(const ln of entries){
+    const d = document.createElement("div");
+    d.className = "rich-line todo-line todo-line-live";
+    d.contentEditable = "true";
+    d.innerHTML = ln.html;
+    d.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); if(e.altKey || e.shiftKey) document.execCommand("insertLineBreak"); else d.blur(); }
+      if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); insertLinkAtSelection(d); }
+    });
+    let committed = sanitizeRichHTML(d.innerHTML);
+    d.addEventListener("blur", () => {
+      const clean = sanitizeRichHTML(d.innerHTML);
+      if(clean === committed) return;
+      committed = clean;
+      ln.ec.todoLine = stripTags(clean).trim() ? clean : "";
+      if(!ln.ec.todoLine) d.remove();
+      scheduleSave();
+    });
+    box.appendChild(d);
+  }
+  return box;
+}
+function openTitlePage(item, title){
+  STATE.tab = "titles"; STATE.view = "title"; STATE.currentTitle = { itemId: item.id, title };
+  render();
+  window.scrollTo(0, 0);
+}
+function renderTitlePage(itemId, title){
+  const item = STATE.data.items.find(i => i.id === itemId);
+  if(!item || !(item.titles || []).includes(title)){
+    STATE.view = "overview"; STATE.currentTitle = null; STATE.tab = "titles";
+    return renderTitlesTab();
+  }
+  migrateTodos(item); migrateTitlePriority(item); migrateTitleDetails(item);
+  const wrap = el(`<div></div>`);
+  const back = el(`<div class="back-link">← Back to titles</div>`);
+  back.onclick = () => { STATE.view = "overview"; STATE.tab = "titles"; STATE.currentTitle = null; render(); };
+  wrap.appendChild(back);
+  const starred = item.priorityTitles.includes(title);
+  const head = el(`
+    <div class="title-page-head">
+      <h1 class="title-page-name">${escapeHtml(stripTags(title))}${starred ? ` <span class="title-page-star" title="Starred">&#9733;</span>` : ""}</h1>
+      <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
+    </div>
+  `);
+  head.querySelector('[data-role="open"]').onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+  wrap.appendChild(head);
+
+  // To-Dos for this title (plus any that apply to the whole estate)
+  const todoPanel = el(`<div class="panel"><div class="panel-head"><div><h2>To-Do</h2></div></div><div class="panel-pad"><div data-holder="todo"></div></div></div>`);
+  todoPanel.querySelector('[data-holder="todo"]').appendChild(renderTodoItemsEditor(item, { title }));
+  wrap.appendChild(todoPanel);
+
+  // Progress: every to-do for this title, newest first
+  const hist = item.todos
+    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && (!t.title || t.title === title))
+    .sort((a, b) => {
+      const sa = (a.done ? a.doneAt : a.createdAt) || "", sb = (b.done ? b.doneAt : b.createdAt) || "";
+      return sa < sb ? 1 : sa > sb ? -1 : 0;
+    });
+  const prog = el(`<div class="panel"><div class="panel-head"><div><h2>Progress</h2></div></div><div class="panel-pad"></div></div>`);
+  const pad = prog.querySelector(".panel-pad");
+  if(!hist.length) pad.appendChild(el(`<div class="section-note">Every to-do for this title, finished or open, is recorded here.</div>`));
+  for(const t of hist) pad.appendChild(buildProgressRow(item, t));
+  wrap.appendChild(prog);
+
+  // About this title: logline + notes (editable)
+  const getTd = () => (item.titleDetails || []).find(d => d.title === title);
+  const td = getTd() || {};
+  const facts = [
+    ["Genre", td.genre], ["Original / adapted", td.originalOrAdapted], ["Episodes", td.episodeCount],
+    ["Based on", td.basedOn], ["Original run", td.originalRun], ["Broadcaster", td.broadcaster],
+  ].map(([k, v]) => [k, stripTags(v)]).filter(([, v]) => v);
+  const about = el(`
+    <div class="panel">
+      <div class="panel-head"><div><h2>About this title</h2></div></div>
+      <div class="panel-pad">
+        ${facts.length ? `<div class="title-card-facts" style="margin-bottom:10px;">${facts.map(([k, v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div>` : ""}
+        <span class="field-label">Logline</span>
+        <div data-holder="logline"></div>
+        <span class="field-label" style="margin-top:12px;display:block;">Title notes</span>
+        <div data-holder="tnotes"></div>
+      </div>
+    </div>
+  `);
+  const saveTd = (field, label) => (v) => {
+    ensureTitleDetailForTag(item, title);
+    const d = getTd(); const old = d[field];
+    if(old === v) return;
+    d[field] = v;
+    recordChange(item.id, "item", item.id, item.name, "titleDetails." + field, stripTags(title) + " " + label, old, v);
+    scheduleSave();
+  };
+  const logline = createRichTextEditor(td.logline || "", "Add a logline…", 44);
+  about.querySelector('[data-holder="logline"]').appendChild(logline.wrap);
+  bindCommitRich(logline.editable, saveTd("logline", "logline"));
+  const tnotes = createRichTextEditor(td.notes || "", "Notes on this title…", 60);
+  about.querySelector('[data-holder="tnotes"]').appendChild(tnotes.wrap);
+  bindCommitRich(tnotes.editable, saveTd("notes", "notes"));
+  wrap.appendChild(about);
+
+  // The estate's own notes
+  const est = el(`
+    <div class="panel">
+      <div class="panel-head"><div><h2>Estate notes</h2><div class="section-note" style="margin-top:2px;">${escapeHtml(item.name)}. Same notes as on the estate page.</div></div></div>
+      <div class="panel-pad"><div data-holder="contacts"></div><div data-holder="notes"></div></div>
+    </div>
+  `);
+  const cl = buildContactLinesBox(item);
+  if(cl.children.length) est.querySelector('[data-holder="contacts"]').appendChild(cl);
+  const en = createRichTextEditor(item.notes, "Add notes about the estate…", 60);
+  est.querySelector('[data-holder="notes"]').appendChild(en.wrap);
+  bindCommitRich(en.editable, v => { item.notes = v; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Additional Notes", "", v); scheduleSave(); });
+  wrap.appendChild(est);
+  return wrap;
 }
 function renderTitlesTab(){
   const wrap = el(`<div></div>`);
@@ -3276,6 +4029,30 @@ function removeTitleDetailByText(item, title){
   migrateTitleDetails(item);
   const idx = item.titleDetails.findIndex(td => td.title === title);
   if(idx !== -1) item.titleDetails.splice(idx, 1);
+}
+/** Create a brand-new estate (same defaults as "+ New item") without re-rendering; caller renders. */
+function createEstateRecord(name){
+  const now = new Date().toISOString();
+  const item = {
+    id: uid("itm"), name, owner: "", currentPhase: "Call", status: "",
+    summary: "", notes: "",
+    target_call:"", target_pitch:"", target_proposal:"",
+    target_rights_secured:"", stepNotes:{}, stepActuals:{}, customSteps:[], removedPresetSteps:[], stepPending:{}, stepLabelOverrides:{}, estateCategory:"pursuing", todoCategory:"call", todo:{stepRef:"",text:"",priority:false,assignee:""}, titles:[], estateContacts:[],
+    titleDetails:[], todos:[], createdAt: now, updatedAt: now,
+  };
+  STATE.data.items.push(item);
+  recordChange(item.id, "item", item.id, item.name, "created", "Item created", "", name);
+  return item;
+}
+/** Attach a title to an estate (or reuse the one already there); returns the stored title string. */
+function attachTitleRecord(item, title){
+  if(!item.titles) item.titles = [];
+  const existing = item.titles.find(t => stripTags(t).trim().toLowerCase() === title.trim().toLowerCase());
+  if(existing) return existing;
+  item.titles.push(title);
+  ensureTitleDetailForTag(item, title);
+  recordChange(item.id, "item", item.id, item.name, "titles", "Title added", "", title);
+  return title;
 }
 function addTitle(item, value){
   const title = value.trim();
