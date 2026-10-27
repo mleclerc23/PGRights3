@@ -2814,12 +2814,25 @@ function bindFormattedEditing(docEl){
 }
 
 /** Take an estate off the To-Do page: deletes its open to-dos and dismisses its hold follow-up (the estate itself is untouched). */
+/** Keep an estate (and optionally one of its titles) on the Action List even with nothing active. */
+function pinToActionList(item, title){
+  if(!item || item.id === GENERAL_ID) return;
+  item.actionPinned = true;
+  if(title){
+    if(!item.actionTitles) item.actionTitles = [];
+    if(!item.actionTitles.includes(title)) item.actionTitles.push(title);
+  }
+  recordChange(item.id, "item", item.id, item.name, "actionPinned", "Added to Action List", "", title ? stripTags(title) : item.name);
+  scheduleSave();
+  render();
+}
 function removeTodoEntry(item){
   migrateTodos(item);
   const open = item.todos.filter(t => !t.done);
   for(const t of open) recordChange(item.id, "item", item.id, item.name, "todoRemove", "To-do removed", stripTags(t.text), "");
   item.todos = item.todos.filter(t => t.done);
   item.actionTitles = [];
+  item.actionPinned = false;
   if(item.estateCategory === "hold" && isValidDate(item.holdFollowUpDate)) item.todoFollowUpDismissed = item.holdFollowUpDate;
   scheduleSave();
   render();
@@ -2870,7 +2883,7 @@ function renderTodoTab(){
   const ordIdx = (i) => { const k = order.indexOf(i.id); return k === -1 ? 1e9 : k; };
   const entryLabel = (i) => { const sc = todoSections(i); return (sc ? sc[0].label : todoTitlesLabel(i)) || i.name; };
   const rows = open.concat([general])
-    .filter(i => i.id === GENERAL_ID || openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || (i.actionTitles && i.actionTitles.length && todoSections(i)))
+    .filter(i => i.id === GENERAL_ID || openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i)))
     .sort((a, b) => {
       // Urgent first, then General, then everything else alphabetically by title / estate.
       if(hasUrgent(a) !== hasUrgent(b)) return hasUrgent(a) ? -1 : 1;
@@ -3129,7 +3142,7 @@ function renderTodoTab(){
       <div>
         <div class="step-note-add todo-add">
           <input type="text" class="step-note-input todo-add-estate" id="todo-add-estate" list="todo-add-list" placeholder="Estate or title (blank = General, or type a new one)…" autocomplete="off" />
-          <input type="text" class="step-note-input" id="todo-add-text" placeholder="Add a to-do…" />
+          <input type="text" class="step-note-input" id="todo-add-text" placeholder="To-do (optional — blank just keeps the estate/title on the list)…" />
         </div>
         <div class="todo-add-msg section-note" id="todo-add-msg" style="display:none;"></div>
         <datalist id="todo-add-list">${options.map(o => `<option value="${escapeHtml(o.label)}"></option>`).join("")}</datalist>
@@ -3153,7 +3166,7 @@ function renderTodoTab(){
       msg.innerHTML = ""; msg.style.display = "";
       const finish = (item, title) => {
         if(text) addTodo(item, text, "", title || "");
-        else { scheduleSave(); render(); }
+        else pinToActionList(item, title || "");
       };
       const sepMatch = typed.match(/^(.+?)\s+[-\u2013\u2014]+\s+(.+)$/);
       const findEstate = (name) => {
@@ -3198,7 +3211,11 @@ function renderTodoTab(){
       const r = resolve(add.querySelector("#todo-add-estate").value);
       if(r.err === "No estate or title matches that."){ offerCreate(add.querySelector("#todo-add-estate").value, text); return; }
       if(r.err){ say(r.err); return; }
-      if(!text){ say("Write the to-do text first."); return; }
+      if(!text){
+        if(r.item.id === GENERAL_ID){ say("Write the to-do text first."); return; }
+        pinToActionList(r.item, r.title);       // no to-do: just keep it on the list
+        return;
+      }
       addTodo(r.item, text, "", r.title);
     };
     for(const id of ["#todo-add-text", "#todo-add-estate"]){
