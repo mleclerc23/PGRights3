@@ -708,6 +708,31 @@
   .todo-entry.collapsed .todo-subsec:not(.collapsed) .todo-collapse{ transform:none; }
   .todo-sub-head{ cursor:default; }
   .todo-sub-head .todo-entry-remove{ margin-left:auto; }
+  .title-estate-link{ cursor:pointer; }
+  .title-estate-link:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
+  .pulse-name[data-open]{ cursor:pointer; }
+  .doc-row{ display:flex; align-items:center; gap:12px; padding:8px 0; border-top:1px solid var(--border-soft); }
+  .doc-row:first-child{ border-top:none; }
+  .doc-main{ flex:1; min-width:0; }
+  .doc-name{ background:none; border:none; padding:0; font:inherit; font-weight:600; color:#000; cursor:pointer; text-align:left; word-break:break-word; }
+  .doc-name:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
+  .doc-meta{ font-size:12px; color: var(--text-dim); }
+  .doc-group{ font-size:11px; font-family: var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color: var(--text-dim); margin:14px 0 2px; }
+  .doc-drop{ margin-top:12px; padding:12px; border:1px dashed var(--border); border-radius:8px; text-align:center; font-size:12px; color: var(--text-faint); }
+  .doc-drop.over{ border-color:#000; color:#000; background: var(--panel-alt); }
+  .doc-status{ font-size:12px; margin-top:8px; color: var(--text-dim); }
+  .doc-status.bad{ color: var(--red); }
+  .doc-actions{ display:flex; align-items:center; gap:8px; }
+  .modal.modal-quickadd{ max-width:640px; }
+  .modal-quickadd .todo-add{ flex-wrap:wrap; }
+  .modal-quickadd .todo-add .todo-add-estate{ flex:1 1 100%; width:100%; }
+  .modal-quickadd .todo-add .step-note-input{ flex:1 1 60%; }
+  #details-sort .btn{ font-size:11.5px; padding:3px 11px; line-height:1.3; }
+  .notes-date-row{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .notes-date{ font-family: var(--mono, ui-monospace, monospace); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color: var(--text-faint); }
+  .notes-date-label{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color: var(--text-faint); }
+  .todo-title-tag{ display:inline-block; font-size:10px; letter-spacing:.07em; text-transform:uppercase; color: var(--text-faint); border:1px solid var(--line, #c5d0dc); border-radius:999px; padding:0 7px; margin-bottom:3px; cursor:pointer; }
+  .todo-title-tag:hover{ color: var(--ink); border-color: var(--ink); }
 </style>
 
 </head>
@@ -1155,6 +1180,31 @@ function toggleTodoPriority(item){
 const ACCESS_PASSWORD = "PGrights26";
 const API_URL = "/api/data";
 const API_HEADERS = { "Content-Type": "application/json", "x-app-password": ACCESS_PASSWORD };
+
+/* ---- Document storage ---------------------------------------------------
+ * Files live outside the main data blob (which only keeps name/size/etc.).
+ * Site: the /api/files Pages Function (functions/api/files.js) keeps them in KV. */
+const fileStore = {
+  max: 20 * 1024 * 1024,
+  label: "20 MB",
+  async put(id, file){
+    let r;
+    try{
+      r = await fetch(`/api/files?id=${encodeURIComponent(id)}&name=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "x-app-password": ACCESS_PASSWORD, "Content-Type": file.type || "application/octet-stream" }, body: file });
+      const j = await r.json();
+      if(!r.ok || !j || !j.ok) throw new Error("bad response");
+    }catch(e){ throw new Error("File storage isn't set up on the site yet. Add functions/api/files.js to the project and redeploy."); }
+  },
+  async get(id){
+    const r = await fetch(`/api/files?id=${encodeURIComponent(id)}`, { headers: { "x-app-password": ACCESS_PASSWORD } });
+    if(!r.ok) throw new Error("not found");
+    return await r.blob();
+  },
+  async del(id){
+    await fetch(`/api/files?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-app-password": ACCESS_PASSWORD } });
+  },
+};
+
 let saveTimer = null;
 
 /** The 22 estates recovered from playgroundrights.com via screenshots, after
@@ -1342,7 +1392,20 @@ document.addEventListener("keydown", (e) => {
   if(editable) ae.blur();
   if(e.shiftKey) applyHistory(redoStack, undoStack, "redo"); else applyHistory(undoStack, redoStack, "undo");
 }, true);
+/** Keep estates and each estate's titles A-Z (ignoring a leading "The"); blank ones last. */
+function normalizeOrder(boot){
+  const d = STATE.data; if(!d || !Array.isArray(d.items)) return;
+  // Estate notes carry a date: the one typed in, else the day they were first written (legacy notes: the estate's creation date).
+  for(const it of d.items){
+    if(!richIsEmpty(it.notes)){ if(!isValidDate(it.notesCreatedAt)) it.notesCreatedAt = (boot && typeof it.createdAt === "string" && isValidDate(it.createdAt.slice(0, 10))) ? it.createdAt.slice(0, 10) : todayISO(); }
+    else if(it.notesCreatedAt || it.notesDate){ it.notesCreatedAt = ""; it.notesDate = ""; }
+  }
+  const cmp = (a, b) => { const ka = sortKey(a), kb = sortKey(b); return ka === kb ? 0 : !ka ? 1 : !kb ? -1 : ka.localeCompare(kb); };
+  d.items.sort((a, b) => cmp(a.name, b.name));
+  for(const it of d.items) if(Array.isArray(it.titles)) it.titles.sort(cmp);
+}
 function scheduleSave(){
+  normalizeOrder();
   trackUndo();
   setSaveStatus("Editing…");
   clearTimeout(saveTimer);
@@ -1689,7 +1752,38 @@ function badgeHtml(status, label){
   return `<span class="badge badge-${cls}"><span class="dot"></span>${label || (status==="completed" ? "Completed" : cls[0].toUpperCase()+cls.slice(1))}</span>`;
 }
 
+let quickAddFresh = false;
+/* ---- Browser history: back/forward move between pages of the app ---- */
+let navKey = null, navPopping = false;
+function navSnapshot(){ return { tab: STATE.tab, view: STATE.view, itemId: STATE.currentItemId || null, title: STATE.currentTitle || null }; }
+function syncHistory(){
+  try{
+    const snap = navSnapshot(), key = JSON.stringify(snap);
+    if(key === navKey) return;
+    if(navKey === null) history.replaceState(snap, ""); else if(!navPopping) history.pushState(snap, "");
+    navKey = key;
+  }catch(e){}
+}
+function applyNav(snap){
+  if(!snap || typeof snap !== "object" || !STATE.data) return false;
+  const items = STATE.data.items || [];
+  let view = snap.view, tab = snap.tab;
+  if(view === "detail" && !items.some(i => i.id === snap.itemId)) view = "overview";
+  if(view === "title" && !(snap.title && items.some(i => i.id === snap.title.itemId && (i.titles || []).includes(snap.title.title)))) view = "overview";
+  STATE.tab = tab || "todo"; STATE.view = view || "overview";
+  STATE.currentItemId = view === "detail" ? snap.itemId : null;
+  STATE.currentTitle = view === "title" ? snap.title : null;
+  return true;
+}
+window.addEventListener("popstate", (e) => {
+  if(!STATE.data || !e.state) return;
+  if(!applyNav(e.state)) return;
+  navPopping = true; navKey = JSON.stringify(navSnapshot());
+  try{ STATE.modal = null; render(); window.scrollTo(0, 0); } finally { navPopping = false; }
+});
 function render(){
+  syncHistory();
+  if(STATE.modal === "quick-add"){ if(quickAddFresh) quickAddFresh = false; else STATE.modal = null; }   // any action in the pop-up closes it
   const root = document.getElementById("app");
   root.innerHTML = "";
   root.appendChild(renderTopbar());
@@ -1713,6 +1807,7 @@ function render(){
   }
 
   if(STATE.modal === "new-item") root.appendChild(renderNewItemModal());
+  if(STATE.modal === "quick-add") root.appendChild(renderQuickAddModal());
 }
 
 function renderTopbar(){
@@ -1727,10 +1822,8 @@ function renderTopbar(){
         </div>
         <div class="nav-tabs">
           <div class="nav-tab ${STATE.tab==='todo' ? 'active':''}" id="tab-todo">Action List</div>
-          <div class="nav-tab ${STATE.tab==='overview' ? 'active':''}" id="tab-overview">Estates</div>
-          <div class="nav-tab ${STATE.tab==='titles' ? 'active':''}" id="tab-titles">Titles</div>
+          <div class="nav-tab ${STATE.tab==='overview' ? 'active':''}" id="tab-overview">Details</div>
           <div class="nav-tab ${STATE.tab==='summary' ? 'active':''}" id="tab-summary">Progress Summary</div>
-          <div class="nav-tab ${STATE.tab==='timeline' ? 'active':''}" id="tab-timeline">Timeline</div>
         </div>
       </div>
       <div class="topnav-right">
@@ -1744,16 +1837,27 @@ function renderTopbar(){
       </div>
     </div>
   `);
-  bar.querySelector("#new-item-btn").onclick = () => { STATE.modal = "new-item"; render(); };
+  bar.querySelector("#new-item-btn").onclick = () => { STATE.modal = "quick-add"; quickAddFresh = true; render(); setTimeout(() => { const i = document.querySelector(".modal-quickadd #todo-add-estate"); if(i) i.focus(); }, 0); };
   bar.querySelector("#brand-home-link").onclick = () => { STATE.tab = "todo"; STATE.view = "overview"; render(); };
   bar.querySelector("#tab-overview").onclick = () => { STATE.tab = "overview"; STATE.view = "overview"; render(); };
   bar.querySelector("#tab-summary").onclick = () => { STATE.tab = "summary"; STATE.view = "overview"; render(); };
-  bar.querySelector("#tab-timeline").onclick = () => { STATE.tab = "timeline"; STATE.view = "overview"; render(); };
-  bar.querySelector("#tab-titles").onclick = () => { STATE.tab = "titles"; STATE.view = "overview"; render(); };
   bar.querySelector("#tab-todo").onclick = () => { STATE.tab = "todo"; STATE.view = "overview"; render(); };
   const searchInput = bar.querySelector("#global-search");
   searchInput.oninput = () => {
     STATE.search = searchInput.value;
+    // Search spans estates and titles: flip the Details toggle to whichever view has the match.
+    if(STATE.tab === "overview" && STATE.view === "overview"){
+      const q = STATE.search.trim().toLowerCase();
+      if(!q){
+        if(STATE.sortBeforeSearch){ STATE.detailsSort = STATE.sortBeforeSearch; STATE.sortBeforeSearch = null; }
+      }else{
+        const its = STATE.data.items;
+        const estateHit = its.some(i => estateMatches(i, q)), titleHit = its.some(i => titleMatches(i, q));
+        const cur = detailsSort();
+        const want = estateHit ? "estate" : (titleHit ? "title" : cur);
+        if(want !== cur){ if(!STATE.sortBeforeSearch) STATE.sortBeforeSearch = cur; STATE.detailsSort = want; }
+      }
+    }
     renderOverviewInPlace();
   };
   return bar;
@@ -1769,9 +1873,7 @@ function renderOverviewInPlace(){
 }
 function renderCurrentTabBody(){
   if(STATE.tab === "changes") return renderChangesTab();
-  if(STATE.tab === "timeline") return renderTimelineTab();
   if(STATE.tab === "todo") return renderTodoTab();
-  if(STATE.tab === "titles") return renderTitlesTab();
   if(STATE.tab === "summary") return renderSummaryTab();
   return renderOverviewBody();
 }
@@ -1819,11 +1921,51 @@ function renderKnockOnCard(){
 }
 
 /* ---- Overview: "Slate overview" ------------------------------------------ */
+function estateMatches(i, q){ return i.name.toLowerCase().includes(q) || (i.owner||"").toLowerCase().includes(q) || (i.currentPhase||"").toLowerCase().includes(q); }
+function titleMatches(i, q){ return (i.titles || []).some(t => stripTags(t).toLowerCase().includes(q)); }
+/** "Gerard Glaister Colditz": an estate and a title typed together. Returns {estates, titles} (each non-empty) or null. */
+function combinedSearch(q){
+  q = (q || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if(!q || !q.includes(" ")) return null;
+  const items = STATE.data.items;
+  const tokensIn = (txt, rest) => rest.split(" ").filter(Boolean).every(t => txt.includes(t));
+  const estates = new Map(), titles = [];
+  const addTitle = (item, t) => { if(!titles.some(x => x.item === item && x.title === t)) titles.push({ item, title: t }); };
+  // title text inside the query -> the rest names the estate
+  for(const it of items) for(const t of it.titles || []){
+    const lab = stripTags(t).toLowerCase(); if(lab.length < 3 || !q.includes(lab)) continue;
+    const rest = q.replace(lab, " ").replace(/\s+/g, " ").trim(); if(!rest) continue;
+    for(const e of items) if(tokensIn((e.name + " " + (e.owner || "")).toLowerCase(), rest)){ estates.set(e.id, e); if((e.titles || []).some(x => stripTags(x).toLowerCase() === lab)) addTitle(e, (e.titles || []).find(x => stripTags(x).toLowerCase() === lab)); }
+  }
+  // estate name inside the query -> the rest names the title
+  for(const e of items){
+    const nm = e.name.toLowerCase(), base = nm.replace(/\s+estate$/, "");
+    const hit = [nm, base].find(n => n.length >= 3 && q.includes(n)); if(!hit) continue;
+    const rest = q.replace(hit, " ").replace(/\s+/g, " ").trim(); if(!rest) continue;
+    for(const t of e.titles || []) if(tokensIn(stripTags(t).toLowerCase(), rest)){ estates.set(e.id, e); addTitle(e, t); }
+  }
+  if(!estates.size || !titles.length) return null;
+  return { estates: Array.from(estates.values()).sort((a, b) => byName(a.name, b.name)), titles: titles.sort((a, b) => byName(stripTags(a.title), stripTags(b.title))) };
+}
+function renderCombinedResults(res){
+  const panel = el(`<div class="panel"><div class="panel-head"><div><h2>Search results</h2><div class="section-note" style="margin-top:2px;">Matched an estate and a title. Click either to open it.</div></div></div><div class="panel-pad" data-role="list"></div></div>`);
+  const list = panel.querySelector('[data-role="list"]');
+  const row = (name, sub, onClick) => {
+    const r = el(`<div class="pulse-row"><div class="pulse-left"><span class="dot" style="background:var(--slate)"></span><div><div class="pulse-name" data-open></div><div class="pulse-sub"></div></div></div></div>`);
+    r.querySelector("[data-open]").textContent = name; r.querySelector(".pulse-sub").textContent = sub;
+    r.querySelector("[data-open]").onclick = onClick; return r;
+  };
+  list.appendChild(el(`<div class="doc-group">Estate</div>`));
+  for(const e of res.estates) list.appendChild(row(e.name, "Estate", () => { STATE.view = "detail"; STATE.currentItemId = e.id; render(); }));
+  list.appendChild(el(`<div class="doc-group">Title</div>`));
+  for(const x of res.titles) list.appendChild(row(stripTags(x.title), x.item.name, () => openTitlePage(x.item, x.title)));
+  return panel;
+}
 function filteredItems(){
   const q = STATE.search.trim().toLowerCase();
   if(!q) return STATE.data.items;
   return STATE.data.items.filter(i =>
-    i.name.toLowerCase().includes(q) || (i.owner||"").toLowerCase().includes(q) || (i.currentPhase||"").toLowerCase().includes(q)
+    estateMatches(i, q) || titleMatches(i, q)
   );
 }
 function computeItemSpan(item){
@@ -1834,6 +1976,76 @@ function computeItemSpan(item){
   return { start, end };
 }
 
+/** Details page ordering: "estate" (Pursuing / Hold windows, A-Z by estate) or "title" (every title in every estate, A-Z). */
+function detailsSort(){
+  if(STATE.detailsSort) return STATE.detailsSort;
+  let v = "estate"; try{ v = localStorage.getItem("pgr:detailsSort") || "estate"; }catch(e){}
+  STATE.detailsSort = v === "title" ? "title" : "estate";
+  return STATE.detailsSort;
+}
+function renderTitleIndex(){
+  const items = filteredItems();
+  for(const item of items){ migrateEstateCategory(item); migrateTitlePriority(item); }
+  // One row per distinct title; a title shared between estates (co-created) lists every estate once.
+  const groups = new Map();
+  for(const item of items) for(const t of item.titles || []){
+    const label = stripTags(t); if(!label) continue;
+    const key = sortKey(label).replace(/\s+/g, " ");
+    if(!groups.has(key)) groups.set(key, { label, entries: [] });
+    const g = groups.get(key);
+    if(!g.entries.some(e => e.item.id === item.id)) g.entries.push({ item, title: t });
+  }
+  const sq = STATE.search.trim().toLowerCase();
+  const rows = Array.from(groups.values()).filter(g => !sq || g.label.toLowerCase().includes(sq));
+  for(const g of rows) g.entries.sort((a, b) => byName(a.item.name, b.item.name));
+  rows.sort((a, b) => byName(a.label, b.label));
+  const estateCount = new Set(rows.flatMap(r => r.entries.map(e => e.item.id))).size;
+  const wrap = el(`<div class="estate-categories"></div>`);
+  const panel = el(`<div class="panel"><div class="panel-head"><div><h2>All titles</h2><div class="section-note" style="margin-top:2px;">${rows.length} title${rows.length === 1 ? "" : "s"} across ${estateCount} estate${estateCount === 1 ? "" : "s"}, A-Z</div></div></div><div class="panel-pad" data-role="list"></div></div>`);
+  const list = panel.querySelector('[data-role="list"]');
+  if(!rows.length) list.appendChild(el(`<div class="section-note">No titles yet. Add titles on an estate's page.</div>`));
+  for(const g of rows){
+    const first = g.entries[0];
+    const health = itemHealth(STATE.data, first.item);
+    const colorVar = health === "completed" ? "var(--slate)" : `var(--${health})`;
+    const starred = g.entries.some(e => e.item.priorityTitles.includes(e.title));
+    const cats = Array.from(new Set(g.entries.map(e => (ESTATE_CATEGORIES.find(c => c[0] === e.item.estateCategory) || [])[1] || "").filter(Boolean)));
+    const row = el(`
+      <div class="pulse-row">
+        <div class="pulse-left">
+          <span class="dot" style="background:${colorVar}"></span>
+          <div>
+            <div class="pulse-name" data-open>${escapeHtml(g.label)}${starred ? ` <span class="title-page-star" title="Starred">&#9733;</span>` : ""}</div>
+            <div class="pulse-sub" data-estates></div>
+          </div>
+        </div>
+        <span>${cats.map(c => `<span class="pill pill-pending" style="margin-left:4px;">${escapeHtml(c)}</span>`).join("")}</span>
+      </div>`);
+    row.querySelector("[data-open]").onclick = () => openTitlePage(first.item, first.title);
+    const sp = row.querySelector("[data-estates]");
+    g.entries.forEach((e, i) => {
+      if(i) sp.appendChild(document.createTextNode(" · "));
+      const a = document.createElement("span");
+      a.textContent = e.item.name; a.className = "title-estate-link"; a.title = "Open this estate's page for the title";
+      a.onclick = () => openTitlePage(e.item, e.title);
+      sp.appendChild(a);
+    });
+    list.appendChild(row);
+  }
+  wrap.appendChild(panel);
+  const bare = items.filter(i => !(i.titles || []).some(t => stripTags(t))).sort((a, b) => byName(a.name, b.name));
+  if(bare.length){
+    const p2 = el(`<div class="panel"><div class="panel-head"><div><h2>Estates without titles</h2></div></div><div class="panel-pad" data-role="list"></div></div>`);
+    const l2 = p2.querySelector('[data-role="list"]');
+    for(const i of bare){
+      const row = el(`<div class="pulse-row"><div class="pulse-left" data-open><span class="dot" style="background:var(--slate)"></span><div><div class="pulse-name">${escapeHtml(i.name)}</div></div></div></div>`);
+      row.querySelector("[data-open]").onclick = () => { STATE.view = "detail"; STATE.currentItemId = i.id; render(); };
+      l2.appendChild(row);
+    }
+    wrap.appendChild(p2);
+  }
+  return wrap;
+}
 function renderOverviewBody(){
   const wrap = el(`<div></div>`);
   const items = STATE.data.items;
@@ -1841,18 +2053,24 @@ function renderOverviewBody(){
   wrap.appendChild(el(`
     <div class="page-head">
       <div>
-        <h1 class="page-title">Estates</h1>
+        <h1 class="page-title">Details</h1>
       </div>
       <div class="page-head-actions">
-        <button class="btn" id="upload-schedule-btn">Upload schedule</button>
-        <button class="btn btn-primary" id="new-item-btn-2">+ New item</button>
+        <div class="todo-view-toggle" id="details-sort">
+          <button class="btn btn-sm ${detailsSort() === "estate" ? "" : "btn-ghost"}" data-sort="estate" type="button">By estate</button>
+          <button class="btn btn-sm ${detailsSort() === "title" ? "" : "btn-ghost"}" data-sort="title" type="button">By title</button>
+        </div>
       </div>
     </div>
   `));
-  wrap.querySelector("#new-item-btn-2").onclick = () => { STATE.modal = "new-item"; render(); };
-  wrap.querySelector("#upload-schedule-btn").onclick = () => showToast("Schedule import isn't wired up in this demo — add items with + New item instead.");
 
-  wrap.appendChild(renderProductionPulse());
+  wrap.querySelectorAll("#details-sort [data-sort]").forEach(b => b.onclick = () => {
+    try{ localStorage.setItem("pgr:detailsSort", b.dataset.sort); }catch(e){}
+    STATE.detailsSort = b.dataset.sort; STATE.sortBeforeSearch = null;
+    renderOverviewInPlace();
+  });
+  const combo = combinedSearch(STATE.search);
+  wrap.appendChild(combo ? renderCombinedResults(combo) : (detailsSort() === "title" ? renderTitleIndex() : renderProductionPulse()));
 
   const changesRow = el(`<div class="changes-link-row"><a class="changes-link" id="view-changes-link">View change history</a></div>`);
   changesRow.querySelector("#view-changes-link").onclick = () => { STATE.tab = "changes"; STATE.view = "overview"; render(); };
@@ -2217,6 +2435,7 @@ function renderTodoItemsEditor(item, opts){
   const addKey = exact ? item.id + "|" + onlyTitle : item.id;
   const canTitle = item.id !== GENERAL_ID && !(onlyTitle && !exact);
   const wrap = el(`<div class="todo-items"></div>`);
+  const showTag = !onlyTitle && !exact && item.id !== GENERAL_ID;
   const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? (t.title || "") === onlyTitle : (!onlyTitle || !t.title || t.title === onlyTitle)));
   // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, oldest first.
   const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
@@ -2250,6 +2469,7 @@ function renderTodoItemsEditor(item, opts){
     r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
     bindConfirmDelete(r.querySelector('[data-role="remove"]'), () => removeTodo(item, t.id), "&times;");
     r.dataset.itemId = item.id; r.dataset.todoId = t.id;
+    if(showTag && t.title) r.querySelector(".todo-item-main").prepend(titleTagEl(item, t.title));
     bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
     return r;
   };
@@ -2297,6 +2517,7 @@ function renderTodoItemsEditor(item, opts){
     r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
     const rm = r.querySelector('[data-role="remove"]');
     if(rm) bindConfirmDelete(rm, () => removeTodo(item, t.id), "&times;");
+    if(showTag && t.title) r.querySelector(".todo-item-main").prepend(titleTagEl(item, t.title));
     r.dataset.itemId = item.id; r.dataset.todoId = t.id;
     bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
     return r;
@@ -2375,7 +2596,7 @@ function renderTodoItemsEditor(item, opts){
   return wrap;
 }
 
-function buildProgressRow(item, t){
+function buildProgressRow(item, t, opts){
   const when = t.done
     ? (isValidDate(t.doneAt) ? `Done ${fmtDateShort(t.doneAt)}` : "Done")
     : (isValidDate(t.createdAt) ? `Added ${fmtDateShort(t.createdAt)}` : "Open");
@@ -2383,6 +2604,7 @@ function buildProgressRow(item, t){
     <div class="progress-row ${t.locked ? "is-locked" : ""}">
       <div class="progress-when">${escapeHtml(when)}</div>
       <div class="progress-body">
+        <div data-holder="ptag"></div>
         <div class="progress-text ${t.done ? "is-done" : ""}">${t.text}</div>
         ${stripTags(t.notes) ? `<div class="progress-notes">${t.notes}</div>` : ""}
         ${isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
@@ -2395,6 +2617,7 @@ function buildProgressRow(item, t){
       <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>Delete</button>
     </div>
   `);
+  if(opts && opts.showTitle && t.title) row.querySelector('[data-holder="ptag"]').appendChild(titleTagEl(item, t.title));
   const reopen = row.querySelector('[data-role="reopen"]');
   if(reopen) reopen.onclick = () => updateTodo(item, t.id, "done", false);
   bindConfirmDelete(row.querySelector('[data-role="pdelete"]'), () => removeTodo(item, t.id), "Delete");
@@ -2419,7 +2642,7 @@ function renderTodoProgressPanel(item){
     list.appendChild(el(`<div class="section-note">Every to-do for this estate, finished or open, is recorded here.</div>`));
     return panel;
   }
-  for(const t of all) list.appendChild(buildProgressRow(item, t));
+  for(const t of all) list.appendChild(buildProgressRow(item, t, { showTitle: true }));
   return panel;
 }
 
@@ -2837,6 +3060,118 @@ function removeTodoEntry(item){
   scheduleSave();
   render();
 }
+/** The quick-add form (estate/title + optional to-do). Used at the bottom of the Action List and in the top-bar "+ New item" pop-up. */
+function buildQuickAdd(){
+  const open = STATE.data.items.filter(i => !(i.stepActuals && i.stepActuals.target_rights_secured));
+  for(const i of open) migrateTodos(i);
+  const general = getGeneralItem();
+  // Quick add: type an estate name or a title (autocompletes) and write a to-do.
+  const options = []; // {label, item}
+  for(const i of open){
+    options.push({ label: i.name, item: i, title: "" });
+    for(const t of (i.titles || [])){
+      const tt = stripTags(t);
+      if(tt) options.push({ label: `${tt} — ${i.name}`, item: i, title: t });
+    }
+  }
+  options.push({ label: "General (no estate or title)", item: general, title: "" });
+  options.sort((x, y) => byName(x.label, y.label));
+  if(options.length){
+    const add = el(`
+      <div>
+        <div class="step-note-add todo-add">
+          <input type="text" class="step-note-input todo-add-estate" id="todo-add-estate" list="todo-add-list" placeholder="Estate or title — or type a new “Title - Estate” and press Enter…" autocomplete="off" />
+          <input type="text" class="step-note-input" id="todo-add-text" placeholder="To-do (optional — blank just keeps the estate/title on the list)…" />
+          <button class="btn btn-sm" id="todo-add-go" type="button">Add</button>
+        </div>
+        <div class="todo-add-msg section-note" id="todo-add-msg" style="display:none;"></div>
+        <datalist id="todo-add-list">${options.map(o => `<option value="${escapeHtml(o.label)}"></option>`).join("")}</datalist>
+      </div>
+    `);
+    const msg = add.querySelector("#todo-add-msg");
+    const say = (t) => { msg.textContent = t; msg.style.display = t ? "" : "none"; };
+    const resolve = (q) => {
+      const query = q.trim().toLowerCase().replace(/\s*[-\u2013\u2014]+\s+/g, " \u2014 ").replace(/\s+/g, " ");
+      if(!query) return { item: general, title: "" };
+      const exact = options.filter(o => o.label.toLowerCase() === query);
+      const hits = exact.length ? exact : options.filter(o => o.label.toLowerCase().includes(query));
+      const ids = [...new Set(hits.map(o => o.item.id))];
+      if(ids.length === 1) return { item: hits[0].item, title: hits.length === 1 ? hits[0].title : "" };
+      if(!ids.length) return { err: "No estate or title matches that." };
+      return { err: "That matches more than one estate — keep typing and pick one from the list." };
+    };
+    // Nothing matched: offer to create the estate and/or title right here.
+    const offerCreate = (raw, text, auto) => {
+      const typed = raw.trim();
+      msg.innerHTML = ""; msg.style.display = "";
+      const finish = (item, title) => {
+        if(text) addTodo(item, text, "", title || "");
+        else pinToActionList(item, title || "");
+      };
+      const sepMatch = typed.match(/^(.+?)\s+[-\u2013\u2014]+\s+(.+)$/);
+      const findEstate = (name) => {
+        const q = name.trim().toLowerCase();
+        const exact = open.filter(i => i.name.toLowerCase() === q);
+        if(exact.length === 1) return exact[0];
+        const part = open.filter(i => i.name.toLowerCase().includes(q));
+        return part.length === 1 ? part[0] : null;
+      };
+      const row = (label, onClick) => {
+        const b = el(`<button class="btn btn-sm" type="button">${escapeHtml(label)}</button>`);
+        b.onclick = onClick; return b;
+      };
+      const box = el(`<div class="todo-create-offer"></div>`);
+      if(sepMatch){
+        const tName = sepMatch[1].trim(), eName = sepMatch[2].trim();
+        const est = findEstate(eName);
+        if(auto){   // "Title - Estate" is unambiguous: create straight away
+          if(est){ const t = attachTitleRecord(est, tName); finish(est, t); }
+          else { const e2 = createEstateRecord(eName); const t = attachTitleRecord(e2, tName); finish(e2, t); }
+          return;
+        }
+        if(est){
+          box.appendChild(el(`<div>No title called “${escapeHtml(tName)}” on ${escapeHtml(est.name)} yet.</div>`));
+          box.appendChild(row(`Create title “${tName}” on ${est.name}` + (text ? " and add the to-do" : ""), () => { const t = attachTitleRecord(est, tName); finish(est, t); }));
+        }else{
+          box.appendChild(el(`<div>No estate called “${escapeHtml(eName)}” yet.</div>`));
+          box.appendChild(row(`Create estate “${eName}” with title “${tName}”` + (text ? " and add the to-do" : ""), () => { const e2 = createEstateRecord(eName); const t = attachTitleRecord(e2, tName); finish(e2, t); }));
+        }
+      }else{
+        box.appendChild(el(`<div>“${escapeHtml(typed)}” isn’t an estate or title yet. Create it as:</div>`));
+        const line = el(`<div class="todo-create-row"></div>`);
+        line.appendChild(row(`New estate “${typed}”`, () => { const e2 = createEstateRecord(typed); finish(e2, ""); }));
+        const sel = el(`<select class="todo-create-select">${open.slice().sort((a, b) => a.name.localeCompare(b.name)).map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join("")}</select>`);
+        line.appendChild(el(`<span class="todo-create-or">or new title on</span>`));
+        line.appendChild(sel);
+        line.appendChild(row("Create title", () => { const est = open.find(i => i.id === sel.value); if(!est) return; const t = attachTitleRecord(est, typed); finish(est, t); }));
+        box.appendChild(line);
+      }
+      const cancel = el(`<button class="btn btn-sm btn-ghost" type="button">Cancel</button>`);
+      cancel.onclick = () => say("");
+      box.appendChild(cancel);
+      msg.appendChild(box);
+    };
+    add.querySelector("#todo-add-go").onclick = () => doAdd();
+    const doAdd = () => {
+      const text = add.querySelector("#todo-add-text").value.trim();
+      const r = resolve(add.querySelector("#todo-add-estate").value);
+      if(r.err === "No estate or title matches that."){ offerCreate(add.querySelector("#todo-add-estate").value, text, true); return; }
+      if(r.err){ say(r.err); return; }
+      if(!text){
+        if(r.item.id === GENERAL_ID){ say("Write the to-do text first."); return; }
+        pinToActionList(r.item, r.title);       // no to-do: just keep it on the list
+        return;
+      }
+      addTodo(r.item, text, "", r.title);
+    };
+    for(const id of ["#todo-add-text", "#todo-add-estate"]){
+      add.querySelector(id).addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); if(id === "#todo-add-estate"){ const rr = resolve(add.querySelector("#todo-add-estate").value); if(rr.err === "No estate or title matches that.") offerCreate(add.querySelector("#todo-add-estate").value, add.querySelector("#todo-add-text").value.trim(), true); else add.querySelector("#todo-add-text").focus(); } else doAdd(); } });
+    }
+    return add;
+  }
+  return null;
+}
+
 function renderTodoTab(){
   const wrap = el(`<div></div>`);
   const view = STATE.todoView || "list";
@@ -3126,103 +3461,8 @@ function renderTodoTab(){
     list.appendChild(entry);
   }
 
-  // Quick add: type an estate name or a title (autocompletes) and write a to-do.
-  const options = []; // {label, item}
-  for(const i of open){
-    options.push({ label: i.name, item: i, title: "" });
-    for(const t of (i.titles || [])){
-      const tt = stripTags(t);
-      if(tt) options.push({ label: `${tt} — ${i.name}`, item: i, title: t });
-    }
-  }
-  options.push({ label: "General (no estate or title)", item: general, title: "" });
-  options.sort((x, y) => byName(x.label, y.label));
-  if(options.length){
-    const add = el(`
-      <div>
-        <div class="step-note-add todo-add">
-          <input type="text" class="step-note-input todo-add-estate" id="todo-add-estate" list="todo-add-list" placeholder="Estate or title (blank = General, or type a new one)…" autocomplete="off" />
-          <input type="text" class="step-note-input" id="todo-add-text" placeholder="To-do (optional — blank just keeps the estate/title on the list)…" />
-        </div>
-        <div class="todo-add-msg section-note" id="todo-add-msg" style="display:none;"></div>
-        <datalist id="todo-add-list">${options.map(o => `<option value="${escapeHtml(o.label)}"></option>`).join("")}</datalist>
-      </div>
-    `);
-    const msg = add.querySelector("#todo-add-msg");
-    const say = (t) => { msg.textContent = t; msg.style.display = t ? "" : "none"; };
-    const resolve = (q) => {
-      const query = q.trim().toLowerCase().replace(/\s*[-\u2013\u2014]+\s+/g, " \u2014 ").replace(/\s+/g, " ");
-      if(!query) return { item: general, title: "" };
-      const exact = options.filter(o => o.label.toLowerCase() === query);
-      const hits = exact.length ? exact : options.filter(o => o.label.toLowerCase().includes(query));
-      const ids = [...new Set(hits.map(o => o.item.id))];
-      if(ids.length === 1) return { item: hits[0].item, title: hits.length === 1 ? hits[0].title : "" };
-      if(!ids.length) return { err: "No estate or title matches that." };
-      return { err: "That matches more than one estate — keep typing and pick one from the list." };
-    };
-    // Nothing matched: offer to create the estate and/or title right here.
-    const offerCreate = (raw, text) => {
-      const typed = raw.trim();
-      msg.innerHTML = ""; msg.style.display = "";
-      const finish = (item, title) => {
-        if(text) addTodo(item, text, "", title || "");
-        else pinToActionList(item, title || "");
-      };
-      const sepMatch = typed.match(/^(.+?)\s+[-\u2013\u2014]+\s+(.+)$/);
-      const findEstate = (name) => {
-        const q = name.trim().toLowerCase();
-        const exact = open.filter(i => i.name.toLowerCase() === q);
-        if(exact.length === 1) return exact[0];
-        const part = open.filter(i => i.name.toLowerCase().includes(q));
-        return part.length === 1 ? part[0] : null;
-      };
-      const row = (label, onClick) => {
-        const b = el(`<button class="btn btn-sm" type="button">${escapeHtml(label)}</button>`);
-        b.onclick = onClick; return b;
-      };
-      const box = el(`<div class="todo-create-offer"></div>`);
-      if(sepMatch){
-        const tName = sepMatch[1].trim(), eName = sepMatch[2].trim();
-        const est = findEstate(eName);
-        if(est){
-          box.appendChild(el(`<div>No title called “${escapeHtml(tName)}” on ${escapeHtml(est.name)} yet.</div>`));
-          box.appendChild(row(`Create title “${tName}” on ${est.name}` + (text ? " and add the to-do" : ""), () => { const t = attachTitleRecord(est, tName); finish(est, t); }));
-        }else{
-          box.appendChild(el(`<div>No estate called “${escapeHtml(eName)}” yet.</div>`));
-          box.appendChild(row(`Create estate “${eName}” with title “${tName}”` + (text ? " and add the to-do" : ""), () => { const e2 = createEstateRecord(eName); const t = attachTitleRecord(e2, tName); finish(e2, t); }));
-        }
-      }else{
-        box.appendChild(el(`<div>“${escapeHtml(typed)}” isn’t an estate or title yet. Create it as:</div>`));
-        const line = el(`<div class="todo-create-row"></div>`);
-        line.appendChild(row(`New estate “${typed}”`, () => { const e2 = createEstateRecord(typed); finish(e2, ""); }));
-        const sel = el(`<select class="todo-create-select">${open.slice().sort((a, b) => a.name.localeCompare(b.name)).map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join("")}</select>`);
-        line.appendChild(el(`<span class="todo-create-or">or new title on</span>`));
-        line.appendChild(sel);
-        line.appendChild(row("Create title", () => { const est = open.find(i => i.id === sel.value); if(!est) return; const t = attachTitleRecord(est, typed); finish(est, t); }));
-        box.appendChild(line);
-      }
-      const cancel = el(`<button class="btn btn-sm btn-ghost" type="button">Cancel</button>`);
-      cancel.onclick = () => say("");
-      box.appendChild(cancel);
-      msg.appendChild(box);
-    };
-    const doAdd = () => {
-      const text = add.querySelector("#todo-add-text").value.trim();
-      const r = resolve(add.querySelector("#todo-add-estate").value);
-      if(r.err === "No estate or title matches that."){ offerCreate(add.querySelector("#todo-add-estate").value, text); return; }
-      if(r.err){ say(r.err); return; }
-      if(!text){
-        if(r.item.id === GENERAL_ID){ say("Write the to-do text first."); return; }
-        pinToActionList(r.item, r.title);       // no to-do: just keep it on the list
-        return;
-      }
-      addTodo(r.item, text, "", r.title);
-    };
-    for(const id of ["#todo-add-text", "#todo-add-estate"]){
-      add.querySelector(id).addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); if(id === "#todo-add-estate"){ const rr = resolve(add.querySelector("#todo-add-estate").value); if(rr.err === "No estate or title matches that.") offerCreate(add.querySelector("#todo-add-estate").value, add.querySelector("#todo-add-text").value.trim()); else add.querySelector("#todo-add-text").focus(); } else doAdd(); } });
-    }
-    panel.querySelector(".panel-pad").appendChild(add);
-  }
+  const quickAdd = buildQuickAdd();
+  if(quickAdd) panel.querySelector(".panel-pad").appendChild(quickAdd);
   wrap.appendChild(panel);
   return wrap;
 }
@@ -3307,20 +3547,20 @@ function buildContactLinesBox(item){
   return box;
 }
 function openTitlePage(item, title){
-  STATE.tab = "titles"; STATE.view = "title"; STATE.currentTitle = { itemId: item.id, title };
+  STATE.tab = "overview"; STATE.view = "title"; STATE.currentTitle = { itemId: item.id, title };
   render();
   window.scrollTo(0, 0);
 }
 function renderTitlePage(itemId, title){
   const item = STATE.data.items.find(i => i.id === itemId);
   if(!item || !(item.titles || []).includes(title)){
-    STATE.view = "overview"; STATE.currentTitle = null; STATE.tab = "titles";
-    return renderTitlesTab();
+    STATE.view = "overview"; STATE.currentTitle = null; STATE.tab = "overview";
+    return renderOverviewBody();
   }
   migrateTodos(item); migrateTitlePriority(item); migrateTitleDetails(item);
   const wrap = el(`<div></div>`);
-  const back = el(`<div class="back-link">← Back to titles</div>`);
-  back.onclick = () => { STATE.view = "overview"; STATE.tab = "titles"; STATE.currentTitle = null; render(); };
+  const back = el(`<div class="back-link">← Back to Details</div>`);
+  back.onclick = () => { STATE.view = "overview"; STATE.tab = "overview"; STATE.currentTitle = null; render(); };
   wrap.appendChild(back);
   const starred = item.priorityTitles.includes(title);
   const head = el(`
@@ -3336,6 +3576,18 @@ function renderTitlePage(itemId, title){
   const todoPanel = el(`<div class="panel"><div class="panel-head"><div><h2>To-Do</h2></div></div><div class="panel-pad"><div data-holder="todo"></div></div></div>`);
   todoPanel.querySelector('[data-holder="todo"]').appendChild(renderTodoItemsEditor(item, { title }));
   wrap.appendChild(todoPanel);
+
+  // The estate's own notes
+  const est = el(`
+    <div class="panel">
+      <div class="panel-head"><div><h2>Estate notes</h2><div class="section-note" style="margin-top:2px;">${escapeHtml(item.name)}. Same notes as on the estate page.</div></div></div>
+      <div class="panel-pad"><div data-holder="contacts"></div><div data-holder="notes"></div></div>
+    </div>
+  `);
+  const cl = buildContactLinesBox(item);
+  if(cl.children.length) est.querySelector('[data-holder="contacts"]').appendChild(cl);
+  est.querySelector('[data-holder="notes"]').appendChild(buildEstateNotesBlock(item));
+  wrap.appendChild(est);
 
   // Progress: every to-do for this title, newest first
   const hist = item.todos
@@ -3377,27 +3629,41 @@ function renderTitlePage(itemId, title){
     recordChange(item.id, "item", item.id, item.name, "titleDetails." + field, stripTags(title) + " " + label, old, v);
     scheduleSave();
   };
-  const logline = createRichTextEditor(td.logline || "", "Add a logline…", 44);
-  about.querySelector('[data-holder="logline"]').appendChild(logline.wrap);
-  bindCommitRich(logline.editable, saveTd("logline", "logline"));
+  // Logline: editable until entered, then read-only (Edit to change), like the other details.
+  const loglineHolder = about.querySelector('[data-holder="logline"]');
+  let editingLogline = false;
+  const paintLogline = () => {
+    loglineHolder.innerHTML = "";
+    const cur = (getTd() || {}).logline || "";
+    if(stripTags(cur) && !editingLogline){
+      const row = el(`<div class="td-top" style="align-items:flex-start;gap:10px;"><div class="td-readonly-text" style="flex:1;"></div><button class="btn btn-sm btn-ghost" type="button">Edit</button></div>`);
+      row.querySelector(".td-readonly-text").innerHTML = cur;
+      row.querySelector("button").onclick = () => { editingLogline = true; paintLogline(); const ed = loglineHolder.querySelector("[contenteditable]"); if(ed) ed.focus(); };
+      loglineHolder.appendChild(row);
+      return;
+    }
+    const ed = createRichTextEditor(cur, "Add a logline…", 44);
+    loglineHolder.appendChild(ed.wrap);
+    const save = saveTd("logline", "logline");
+    bindCommitRich(ed.editable, save);
+    const finish = () => { editingLogline = false; paintLogline(); };
+    if(editingLogline){
+      const done = el(`<button class="btn btn-sm" type="button" style="margin-top:6px;">Done</button>`);
+      done.onmousedown = (e) => e.preventDefault();
+      done.onclick = () => { save(sanitizeRichHTML(ed.editable.innerHTML)); finish(); };
+      loglineHolder.appendChild(done);
+    }else{
+      // first entry: lock as soon as it has been saved with text
+      ed.editable.addEventListener("blur", () => setTimeout(() => { if(stripTags((getTd() || {}).logline || "")) finish(); }, 0));
+    }
+  };
+  paintLogline();
   const tnotes = createRichTextEditor(td.notes || "", "Notes on this title…", 60);
   about.querySelector('[data-holder="tnotes"]').appendChild(tnotes.wrap);
   bindCommitRich(tnotes.editable, saveTd("notes", "notes"));
   wrap.appendChild(about);
 
-  // The estate's own notes
-  const est = el(`
-    <div class="panel">
-      <div class="panel-head"><div><h2>Estate notes</h2><div class="section-note" style="margin-top:2px;">${escapeHtml(item.name)}. Same notes as on the estate page.</div></div></div>
-      <div class="panel-pad"><div data-holder="contacts"></div><div data-holder="notes"></div></div>
-    </div>
-  `);
-  const cl = buildContactLinesBox(item);
-  if(cl.children.length) est.querySelector('[data-holder="contacts"]').appendChild(cl);
-  const en = createRichTextEditor(item.notes, "Add notes about the estate…", 60);
-  est.querySelector('[data-holder="notes"]').appendChild(en.wrap);
-  bindCommitRich(en.editable, v => { item.notes = v; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Additional Notes", "", v); scheduleSave(); });
-  wrap.appendChild(est);
+  wrap.appendChild(renderDocumentsPanel(item, { title }));
   return wrap;
 }
 function renderTitlesTab(){
@@ -3605,7 +3871,7 @@ function renderProductionPulse(){
   const items = filteredItems();
   for(const item of items) migrateEstateCategory(item);
   for(const [key, label] of ESTATE_CATEGORIES){
-    const group = items.filter(i => i.estateCategory === key);
+    const group = items.filter(i => i.estateCategory === key).sort((a, b) => byName(a.name, b.name));
     wrap.appendChild(renderEstateCategoryPanel(key, label, group));
   }
   return wrap;
@@ -3745,6 +4011,138 @@ const ITEM_BASELINE_FIELD_BY_BAR = {
 };
 
 /* ---- Item detail ---------------------------------------------------------- */
+/** Remove an estate entirely (its to-dos, titles and notes go with it). Cmd+Z brings it back. */
+function deleteEstate(item){
+  const idx = STATE.data.items.findIndex(i => i.id === item.id);
+  if(idx < 0) return;
+  STATE.data.items.splice(idx, 1);
+  trashDocs(item.documents);
+  STATE.data.baselines = (STATE.data.baselines || []).filter(b => b.entityId !== item.id);
+  if(Array.isArray(STATE.data.todoOrder)) STATE.data.todoOrder = STATE.data.todoOrder.filter(x => x !== item.id);
+  recordChange(item.id, "item", item.id, item.name, "deleted", "Item deleted", item.name, "");
+  STATE.view = "overview"; STATE.currentItemId = null; STATE.currentTitle = null; STATE.tab = "overview";
+  scheduleSave();
+  render();
+  showToast(`Deleted ${item.name}. Press Cmd+Z to undo.`);
+}
+
+function fmtBytes(n){
+  n = Number(n) || 0;
+  if(n < 1024) return n + " B";
+  if(n < 1024 * 1024) return Math.round(n / 1024) + " KB";
+  return (n / 1024 / 1024).toFixed(1) + " MB";
+}
+/** Open a stored document: viewable types in a new tab, everything else downloads. */
+async function openDocument(doc){
+  const viewable = /^(application\/pdf|image\/(png|jpe?g|gif|webp)|text\/plain)$/.test(doc.type || "");
+  const win = viewable ? window.open("", "_blank") : null;
+  try{
+    const blob = await fileStore.get(doc.id);
+    const url = URL.createObjectURL(new Blob([blob], { type: doc.type || blob.type || "application/octet-stream" }));
+    if(win){ win.location.href = url; }
+    else{ const a = document.createElement("a"); a.href = url; a.download = doc.name; document.body.appendChild(a); a.click(); a.remove(); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }catch(e){
+    if(win) win.close();
+    showToast("Couldn't open that file.");
+  }
+}
+/** Deleted files are kept for a week (so Cmd+Z can still bring them back) and then purged. */
+function trashDocs(docs){
+  if(!docs || !docs.length) return;
+  if(!Array.isArray(STATE.data.trashFiles)) STATE.data.trashFiles = [];
+  for(const d of docs) STATE.data.trashFiles.push({ id: d.id, at: new Date().toISOString() });
+}
+function purgeTrashFiles(){
+  const list = Array.isArray(STATE.data.trashFiles) ? STATE.data.trashFiles : [];
+  if(!list.length) return;
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  const keep = [];
+  for(const t of list){
+    if(Date.parse(t.at) < cutoff){ try{ fileStore.del(t.id); }catch(e){} } else keep.push(t);
+  }
+  if(keep.length !== list.length){ STATE.data.trashFiles = keep; scheduleSave(); }
+}
+function renderDocumentsPanel(item, opts){
+  const fixedTitle = opts && opts.title ? opts.title : null;
+  if(!Array.isArray(item.documents)) item.documents = [];
+  const titles = (item.titles || []).filter(t => stripTags(t));
+  const panel = el(`
+    <div class="panel doc-panel">
+      <div class="panel-head">
+        <div><h2>Documents</h2><div class="section-note" style="margin-top:2px;">${fixedTitle ? `Only documents attached to ${escapeHtml(stripTags(fixedTitle))}.` : `Everything attached to ${escapeHtml(item.name)} and to each of its titles.`} Up to ${fileStore.label} per file.</div></div>
+        <div class="doc-actions">
+          ${fixedTitle || !titles.length ? "" : `<select class="phase-status-select" data-role="target"><option value="">Whole estate</option>${titles.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(stripTags(t))}</option>`).join("")}</select>`}
+          <button class="btn btn-sm" type="button" data-role="upload">Upload</button>
+          <input type="file" multiple data-role="file" style="display:none;" />
+        </div>
+      </div>
+      <div class="panel-pad">
+        <div data-role="list"></div>
+        <div class="doc-drop" data-role="drop">Drop files here to attach them</div>
+        <div class="doc-status" data-role="status"></div>
+      </div>
+    </div>`);
+  const list = panel.querySelector('[data-role="list"]'), status = panel.querySelector('[data-role="status"]');
+  const input = panel.querySelector('[data-role="file"]'), targetSel = panel.querySelector('[data-role="target"]');
+  const rowFor = (d) => {
+    const r = el(`
+      <div class="doc-row">
+        <div class="doc-main"><button class="doc-name" type="button" title="Open / download">${escapeHtml(d.name)}</button>
+          <div class="doc-meta">${escapeHtml(fmtBytes(d.size))} · ${escapeHtml(isValidDate((d.uploadedAt || "").slice(0, 10)) ? fmtDateShort(d.uploadedAt.slice(0, 10)) : "")}</div></div>
+        <span class="pill pill-pending">${d.title ? escapeHtml(stripTags(d.title)) : "Estate"}</span>
+        <button class="btn btn-sm btn-ghost" type="button" data-role="del">Delete</button>
+      </div>`);
+    r.querySelector(".doc-name").onclick = () => openDocument(d);
+    bindConfirmDelete(r.querySelector('[data-role="del"]'), () => {
+      item.documents = item.documents.filter(x => x.id !== d.id);
+      trashDocs([d]);
+      recordChange(item.id, "item", item.id, item.name, "documentRemove", "Document removed", d.name, "");
+      scheduleSave(); render();
+    }, "Delete", "Delete?");
+    return r;
+  };
+  if(!item.documents.length || (fixedTitle && !item.documents.some(d => d.title === fixedTitle))) list.appendChild(el(`<div class="section-note">No documents yet.</div>`));
+  if(fixedTitle){
+    for(const d of item.documents.filter(d => d.title === fixedTitle)) list.appendChild(rowFor(d));
+  }else{
+    // Estate page: everything, grouped (estate-wide first, then each title A-Z).
+    const groups = new Map();
+    for(const d of item.documents){ const k = d.title || ""; if(!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
+    const keys = Array.from(groups.keys()).sort((a, b) => a === "" ? -1 : b === "" ? 1 : byName(a, b));
+    for(const k of keys){
+      if(keys.length > 1) list.appendChild(el(`<div class="doc-group">${k ? escapeHtml(stripTags(k)) : "Estate-wide"}</div>`));
+      for(const d of groups.get(k)) list.appendChild(rowFor(d));
+    }
+  }
+  const say = (t, bad) => { status.textContent = t || ""; status.classList.toggle("bad", !!bad); };
+  const upload = async (files) => {
+    files = Array.from(files || []);
+    if(!files.length) return;
+    const tag = fixedTitle || (targetSel ? targetSel.value : "");
+    let added = 0, failed = "";
+    for(const f of files){
+      if(f.size > fileStore.max){ failed = `“${f.name}” is over the ${fileStore.label} limit.`; continue; }
+      say(`Uploading ${f.name}…`);
+      const id = uid("doc");
+      try{
+        await fileStore.put(id, f);
+        item.documents.push({ id, name: f.name, size: f.size, type: f.type || "", uploadedAt: new Date().toISOString(), title: tag || "" });
+        recordChange(item.id, "item", item.id, item.name, "documentAdd", "Document added", "", f.name);
+        added++;
+      }catch(e){ failed = e && e.message ? e.message : "Upload failed."; }
+    }
+    if(added){ scheduleSave(); render(); if(failed) showToast(failed); }
+    else say(failed || "Nothing uploaded.", true);
+  };
+  panel.querySelector('[data-role="upload"]').onclick = () => input.click();
+  input.onchange = () => { upload(input.files); input.value = ""; };
+  const drop = panel.querySelector('[data-role="drop"]');
+  ["dragenter", "dragover"].forEach(ev => panel.addEventListener(ev, (e) => { if(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")){ e.preventDefault(); drop.classList.add("over"); } }));
+  ["dragleave", "drop"].forEach(ev => panel.addEventListener(ev, () => drop.classList.remove("over")));
+  panel.addEventListener("drop", (e) => { if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){ e.preventDefault(); upload(e.dataTransfer.files); } });
+  return panel;
+}
 function renderItemDetail(itemId){
   const item = STATE.data.items.find(i=>i.id===itemId);
   if(!item){
@@ -3753,7 +4151,7 @@ function renderItemDetail(itemId){
     return renderOverviewBody();
   }
   const wrap = el(`<div></div>`);
-  const back = el(`<div class="back-link">← Back to overview</div>`);
+  const back = el(`<div class="back-link">← Back to Details</div>`);
   back.onclick = () => { STATE.view="overview"; STATE.currentItemId=null; render(); };
   wrap.appendChild(back);
 
@@ -3800,6 +4198,9 @@ function renderItemDetail(itemId){
   head.querySelector("#f-status-override").onchange = (e) => updateItemField(item, "status", e.target.value);
   migrateEstateCategory(item);
   head.querySelector("#f-estate-category").onchange = (e) => updateEstateCategory(item, e.target.value);
+  const delBtn = el(`<button class="btn btn-sm btn-ghost" id="f-delete-estate" type="button" style="margin-top:10px;">Delete estate</button>`);
+  head.querySelector(".item-badges").appendChild(delBtn);
+  bindConfirmDelete(delBtn, () => deleteEstate(item), "Delete estate", "Click again to delete");
   const holdFollowUpInput = head.querySelector("#f-hold-followup");
   if(holdFollowUpInput){
     wrapDateField(holdFollowUpInput, item.holdFollowUpDate);
@@ -3824,19 +4225,16 @@ function renderItemDetail(itemId){
   todoPanel.querySelector("#f-todo-holder").appendChild(renderTodoItemsEditor(item));
   wrap.appendChild(todoPanel);
 
+  wrap.appendChild(renderNotesPanel(item));
+
+  wrap.appendChild(renderDocumentsPanel(item));
+
   const followUpPanel = renderStepsPanel(item, true);
   if(followUpPanel) wrap.appendChild(followUpPanel);
 
   wrap.appendChild(renderTodoProgressPanel(item));
 
-  // Timeline panel
-  const timelinePanel = el(`<div class="panel"><div class="panel-head"><div><span class="eyebrow">Derived from steps</span><h2>Timeline</h2></div></div><div class="panel-pad timeline-wrap" id="tl-holder"></div></div>`);
-  timelinePanel.querySelector("#tl-holder").appendChild(buildTimelineViz(item, itemScheduleItems(STATE.data, item), true));
-  wrap.appendChild(timelinePanel);
-
   wrap.appendChild(renderTitleDetailsPanel(item));
-
-  wrap.appendChild(renderNotesPanel(item));
 
   return wrap;
 }
@@ -5225,20 +5623,79 @@ function removeTitleAttachment(item, idx, attIdx){
   render();
 }
 
+/* ---- Estate notes: read-only once entered, unlock to edit, dated ---- */
+function notesEffectiveDate(item){ return isValidDate(item.notesDate) ? item.notesDate : (isValidDate(item.notesCreatedAt) ? item.notesCreatedAt : ""); }
+function buildEstateNotesBlock(item){
+  const holder = el(`<div></div>`);
+  let editing = false;
+  const save = (v) => {
+    if(v === (item.notes || "")) return;
+    const old = item.notes || "";
+    item.notes = v; item.updatedAt = new Date().toISOString();
+    recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, v);
+    scheduleSave();
+  };
+  const paint = () => {
+    holder.innerHTML = "";
+    const has = !richIsEmpty(item.notes);
+    if(has && !editing){
+      const d = notesEffectiveDate(item);
+      const row = el(`<div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button">Edit</button></div><div class="td-readonly-text"></div></div>`);
+      row.querySelector(".notes-date").textContent = d ? fmtDateShort(d) : "";
+      row.querySelector(".td-readonly-text").innerHTML = item.notes;
+      row.querySelector("button").onclick = () => { editing = true; paint(); const ed = holder.querySelector("[contenteditable]"); if(ed) ed.focus(); };
+      holder.appendChild(row);
+      return;
+    }
+    if(editing){
+      const dr = el(`<div class="notes-date-row"><span class="notes-date-label">Date</span><input type="date" class="step-note-date-input" value="${notesEffectiveDate(item)}" /></div>`);
+      const di = dr.querySelector("input");
+      wrapDateField(di, notesEffectiveDate(item), "Date");
+      di.onchange = (e) => {
+        const old = item.notesDate || "", nv = e.target.value || "";
+        if(old === nv) return;
+        item.notesDate = nv;
+        recordChange(item.id, "item", item.id, item.name, "notesDate", "Estate notes date", old, nv);
+        scheduleSave();
+        const disp = dr.querySelector(".date-field-display");
+        const eff = notesEffectiveDate(item);
+        if(disp){ disp.textContent = eff ? fmtDate(eff) : "Date"; disp.classList.toggle("placeholder", !eff); }
+      };
+      holder.appendChild(dr);
+    }
+    const ed = createRichTextEditor(item.notes || "", "Add notes about the estate…", 60);
+    holder.appendChild(ed.wrap);
+    bindCommitRich(ed.editable, save);
+    if(editing){
+      const done = el(`<button class="btn btn-sm" type="button" style="margin-top:6px;">Done</button>`);
+      done.onmousedown = (e) => e.preventDefault();
+      done.onclick = () => { save(sanitizeRichHTML(ed.editable.innerHTML)); editing = false; paint(); };
+      holder.appendChild(done);
+    }else{
+      ed.editable.addEventListener("blur", () => setTimeout(() => { if(!richIsEmpty(item.notes)) paint(); }, 0));
+    }
+  };
+  paint();
+  return holder;
+}
+function titleTagEl(item, title){
+  const t = el(`<span class="todo-title-tag" title="Open title page"></span>`);
+  t.textContent = stripTags(title);
+  t.onclick = (e) => { e.stopPropagation(); if((item.titles || []).includes(title)) openTitlePage(item, title); };
+  return t;
+}
 function renderNotesPanel(item){
   migrateNotesAttachments(item);
   const panel = el(`
     <div class="panel">
-      <div class="panel-head"><div><h2>Additional Notes</h2></div></div>
+      <div class="panel-head"><div><h2>Estate notes</h2></div></div>
       <div class="panel-pad">
         <div id="f-notes-holder"></div>
         <div id="notes-attachments-holder" style="margin-top:12px;"></div>
       </div>
     </div>
   `);
-  const notes = createRichTextEditor(item.notes, "", 60);
-  panel.querySelector("#f-notes-holder").appendChild(notes.wrap);
-  bindCommitRich(notes.editable, v => updateItemField(item, "notes", v));
+  panel.querySelector("#f-notes-holder").appendChild(buildEstateNotesBlock(item));
   panel.querySelector("#notes-attachments-holder").appendChild(
     renderAttachmentsBlock(
       item.notesAttachments,
@@ -5281,6 +5738,16 @@ function renderChangeRow(c, showItemName){
   return row;
 }
 
+function renderQuickAddModal(){
+  const backdrop = el(`<div class="modal-backdrop"><div class="modal modal-quickadd"><h3>New item</h3><div data-role="slot"></div><div class="modal-actions"><button class="btn btn-ghost" id="qa-cancel" type="button">Close</button></div></div></div>`);
+  const form = buildQuickAdd();
+  if(form) backdrop.querySelector('[data-role="slot"]').appendChild(form);
+  const close = () => { STATE.modal = null; render(); };
+  backdrop.querySelector("#qa-cancel").onclick = close;
+  backdrop.addEventListener("click", (e) => { if(e.target === backdrop) close(); });
+  backdrop.addEventListener("keydown", (e) => { if(e.key === "Escape") close(); });
+  return backdrop;
+}
 /* ---- New item modal -------------------------------------------------------- */
 function renderNewItemModal(){
   const backdrop = el(`
@@ -5328,6 +5795,8 @@ function renderNewItemModal(){
    up in the STORAGE section since it's also sent as the API's auth header.
    ========================================================================= */
 function showAccessGate(onUnlock){
+  // Already unlocked in this tab (refresh / back / forward): skip the password.
+  try{ if(sessionStorage.getItem("pgr:unlocked") === "1"){ onUnlock(); return; } }catch(e){}
   const app = document.getElementById("app");
   app.innerHTML = "";
   const gate = el(`
@@ -5347,6 +5816,7 @@ function showAccessGate(onUnlock){
   const errorEl = gate.querySelector("#access-error");
   const attempt = () => {
     if(input.value === ACCESS_PASSWORD){
+      try{ sessionStorage.setItem("pgr:unlocked", "1"); }catch(e){}
       onUnlock();
     }else{
       errorEl.style.display = "";
@@ -5366,7 +5836,10 @@ function showAccessGate(onUnlock){
   showAccessGate(async () => {
     document.getElementById("app").innerHTML = `<div class="empty">Loading…</div>`;
     STATE.data = await loadData();
+    purgeTrashFiles();
+    normalizeOrder(true);
     undoReset();
+    try{ applyNav(history.state); }catch(e){}   // a refresh stays on the same page
     render();
   });
 })();
