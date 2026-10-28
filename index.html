@@ -751,6 +751,19 @@
   /* red check boxes */
   .todo-item-row .todo-done{ border:1.5px solid var(--red) !important; }
   .todo-item-row .todo-done.on, .todo-item-row.is-done .todo-done{ background: var(--red) !important; border-color: var(--red) !important; }
+  .todo-item-row.is-done .todo-task-input, .todo-item-row.is-done .todo-task-input *{ font-weight:400 !important; }
+  /* heading text, estate notes and contacts share one left edge (chevron sits in a gutter) */
+  .todo-entry-head{ position:relative; padding-left:29px; }
+  .todo-entry-head .todo-collapse{ position:absolute; left:0; top:1px; }
+  .todo-entry > .todo-lines, .todo-entry > .todo-notes-live{ margin-left:29px; }
+  /* tighter heading -> notes gap, whole block a little further left, to-dos indented under the heading text */
+  .todo-entry{ padding-left:12px; }
+  .todo-entry-head{ padding-left:26px; align-items:center; }
+  .todo-entry > .todo-lines, .todo-entry > .todo-notes-live{ margin-left:26px; }
+  .todo-entry > .todo-lines{ margin-top:0; }
+  .todo-entry > .todo-notes-live{ margin-top:2px; }
+  .todo-entry-head .todo-entry-remove{ padding-top:0; padding-bottom:0; }
+  .todo-entry .todo-items{ margin-left:14px; }
 </style>
 
 </head>
