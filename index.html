@@ -741,6 +741,16 @@
   .todo-items .todo-item-row:not(:hover):not(:focus-within) .todo-eyebrow:empty{ display:none; }
   .todo-add-wrap{ margin-top:2px; }
   .todo-sub-head{ margin-top:10px; padding-top:10px; }
+  /* one size for the check box and the note bullet; completed to-dos stay black */
+  .todo-item-row .todo-done{ width:14px !important; height:14px !important; flex:0 0 14px; margin:4px 0 0 !important; font-size:10px; border-radius:3px !important; }
+  .todo-item-row .note-square{ width:6px; height:6px; flex:0 0 6px; margin:8px 4px 0 4px; }
+  .todo-item-row.is-done .todo-done{ background: var(--ink) !important; border-color: var(--ink) !important; margin-top:0 !important; }
+  .todo-item-row.is-done .todo-task-input, .todo-item-row.is-done .todo-task-input a{ color:#000 !important; }
+  .todo-item-row.is-done .todo-eyebrow{ color: var(--text-dim) !important; }
+  .todo-done-date .date-field, .todo-done-date .date-field-display{ color: inherit; }
+  /* red check boxes */
+  .todo-item-row .todo-done{ border:1.5px solid var(--red) !important; }
+  .todo-item-row .todo-done.on, .todo-item-row.is-done .todo-done{ background: var(--red) !important; border-color: var(--red) !important; }
 </style>
 
 </head>
@@ -2202,7 +2212,7 @@ function addTodo(item, text, date, title, kind){
   const value = (text || "").trim();
   if(!value) return;
   migrateTodos(item);
-  const rec = { id: uid("tk"), text: escapeHtml(value), date: kind === "note" ? "" : (date || ""), notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
+  const rec = { id: uid("tk"), text: escapeHtml(value), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
   if(kind === "note") rec.kind = "note";
   item.todos.push(rec);
   recordChange(item.id, "item", item.id, item.name, kind === "note" ? "noteAdd" : "todoAdd", kind === "note" ? "Note added" : "To-do added", "", value);
