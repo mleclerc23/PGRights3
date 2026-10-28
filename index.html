@@ -1401,6 +1401,11 @@ function normalizeOrder(boot){
     else if(it.notesCreatedAt || it.notesDate){ it.notesCreatedAt = ""; it.notesDate = ""; }
   }
   const cmp = (a, b) => { const ka = sortKey(a), kb = sortKey(b); return ka === kb ? 0 : !ka ? 1 : !kb ? -1 : ka.localeCompare(kb); };
+  if(boot){   // one-time: to-dos already completed read as progress too (the original wording is kept for "Reopen")
+    for(const it of [...d.items, d.general].filter(Boolean)) for(const t of (it.todos || [])){
+      if(t.done && t.kind !== "note" && !t.pastDone){ t.pastDone = true; const nt = pastTenseTodo(t.text); if(nt !== t.text){ t.textOpen = t.text; t.text = nt; } }
+    }
+  }
   d.items.sort((a, b) => cmp(a.name, b.name));
   for(const it of d.items) if(Array.isArray(it.titles)) it.titles.sort(cmp);
 }
@@ -2186,6 +2191,31 @@ function addTodo(item, text, date, title, kind){
   scheduleSave();
   render();
 }
+/* ---- Completed to-dos read as progress ("Send pitch email to X @ Y - x@y.com" -> "Sent pitch email to X") ---- */
+const PAST_VERBS = (() => {
+  const irregular = { send:"sent", find:"found", get:"got", make:"made", write:"wrote", speak:"spoke", meet:"met", tell:"told", hear:"heard", take:"took", give:"gave", put:"put", hold:"held", pay:"paid", buy:"bought", bring:"brought", do:"did", sign:"signed", set:"set", hear:"heard", forward:"forwarded", reply:"replied", notify:"notified", identify:"identified", try:"tried", apply:"applied", clarify:"clarified", verify:"verified", reach:"reached", touch:"touched", "log":"logged", "ping":"pinged", "submit":"submitted", "refer":"referred", "plan":"planned", "drop":"dropped", "stop":"stopped", "share":"shared" };
+  const regular = ["call","email","follow","chase","contact","ask","request","confirm","schedule","arrange","book","draft","prepare","review","check","pitch","offer","register","research","locate","obtain","secure","negotiate","finalize","finalise","approve","receive","collect","gather","compile","upload","add","remove","create","deliver","look","nudge","invite","introduce","discuss","update","inform","respond","message","text","phone","visit","lodge","file","chase","revise","request","propose","present","approach","engage","raise","line","resend","recheck","complete","close","cancel","order","process","answer","explore","investigate","pursue","track","trace","source","clear","agree","outline","list","summarise","summarize","organise","organize","setup"];
+  const m = Object.assign({}, irregular);
+  for(const v of regular) if(!m[v]) m[v] = /e$/.test(v) ? v + "d" : (/[^aeiou]y$/.test(v) ? v.slice(0, -1) + "ied" : v + "ed");
+  return m;
+})();
+function pastTenseTodo(html){
+  let h = String(html || "");
+  if(!h.trim()) return h;
+  const m = h.match(/^((?:\s|<[^>]+>)*)([A-Za-z]+)(?=[\s<.,:;!-]|$)/);
+  if(!m) return h;
+  const past = PAST_VERBS[m[2].toLowerCase()];
+  if(!past) return h;                       // not a recognised "to do" verb: leave the wording alone
+  const cap = /^[A-Z]/.test(m[2]) ? past.charAt(0).toUpperCase() + past.slice(1) : past;
+  h = m[1] + cap + h.slice(m[1].length + m[2].length);
+  // Drop trailing contact details: "@ Company", emails, phone numbers, trailing links
+  if(!/</.test(h)) h = h.replace(/\s+@\s+.*$/, "");
+  h = h.replace(/(\s*[-\u2013\u2014:,]?\s*<a\b[^>]*>[^<]*<\/a>)+\s*$/i, "");
+  h = h.replace(/\s*[-\u2013\u2014:,]?\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "");
+  h = h.replace(/\s*[-\u2013\u2014]?\s*\+?\d[\d\s().-]{6,}\d/g, "");
+  h = h.replace(/(\s+(?:at|via|on|@|to:?))+\s*$/i, "").replace(/[\s\-\u2013\u2014,;:]+$/, "");
+  return h.trim() ? h : html;
+}
 function updateTodo(item, id, key, value){
   migrateTodos(item);
   const t = item.todos.find(x => x.id === id);
@@ -2195,6 +2225,12 @@ function updateTodo(item, id, key, value){
   t[key] = value;
   if(key === "done") t.doneAt = value ? todayISO() : "";
   if(key === "done" && !value) t.doneAt = "";
+  if(key === "done"){
+    if(value){
+      if(!t.textOpen && t.kind !== "note"){ const nt = pastTenseTodo(t.text); if(nt !== t.text){ t.textOpen = t.text; t.text = nt; } }
+      t.pastDone = true;
+    }else if(t.textOpen){ t.text = t.textOpen; t.textOpen = ""; }
+  }
   recordChange(item.id, "item", item.id, item.name, "todo" + key.charAt(0).toUpperCase() + key.slice(1), "To-do " + key, String(old || ""), String(value || ""));
   scheduleSave();
   render();
