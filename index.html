@@ -738,7 +738,7 @@
   .todo-item-row{ padding:4px 0; }
   .todo-item-row.is-done{ padding-top:2px; padding-bottom:2px; }
   .todo-done-date, .todo-row-date{ margin:0 0 0 12px !important; }
-  .todo-items .todo-item-row:not(:hover):not(:focus-within) .todo-eyebrow:empty{ display:none; }
+  .todo-items .todo-item-row:not(:focus-within) .todo-eyebrow:empty{ display:none; }
   .todo-add-wrap{ margin-top:2px; }
   .todo-sub-head{ margin-top:10px; padding-top:10px; }
   /* one size for the check box and the note bullet; completed to-dos stay black */
@@ -1443,7 +1443,7 @@ function normalizeOrder(boot){
     const canon = new Map();
     for(const t of (it.titles || [])){ const k = tkey(t); if(k && !canon.has(k)) canon.set(k, t); }
     const fix = (x) => { if(!x.title) return; const k = tkey(x.title); if(!k) return; if(!canon.has(k)) canon.set(k, x.title); if(x.title !== canon.get(k)) x.title = canon.get(k); };
-    for(const t of (it.todos || [])) fix(t);
+    for(const t of (it.todos || [])){ fix(t); if(typeof t.notes === "string" && t.notes && richIsEmpty(t.notes)) t.notes = ""; }
     for(const t of (it.documents || [])) fix(t);
     if(Array.isArray(it.actionTitles)){ const seen = new Set(); it.actionTitles = it.actionTitles.map(t => canon.get(tkey(t)) || t).filter(t => { const k = tkey(t); if(seen.has(k)) return false; seen.add(k); return true; }); }
   }
@@ -2261,6 +2261,7 @@ function updateTodo(item, id, key, value){
   migrateTodos(item);
   const t = item.todos.find(x => x.id === id);
   if(!t) return;
+  if(key === "notes" && typeof value === "string" && richIsEmpty(value)) value = "";   // a lone <br> left by deleting text is not a note
   const old = t[key];
   if(old === value) return;
   t[key] = value;
@@ -2546,7 +2547,7 @@ function renderTodoItemsEditor(item, opts){
     { const sb = r.querySelector(".todo-item-sub"); r.querySelector(".todo-text-row").appendChild(sb); sb.classList.add("todo-row-date"); }
     wrapDateField(nDate, t.date, "Date (optional)");
     nDate.onchange = (e) => updateTodo(item, t.id, "date", e.target.value || "");
-    const nNotes = createRichTextLine(t.notes || "", "Add a note…", "todo-eyebrow");
+    const nNotes = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow");
     r.querySelector('[data-holder="notes"]').appendChild(nNotes);
     bindCommitRich(nNotes, v => updateTodo(item, t.id, "notes", v));
     if(t.locked){ line.contentEditable = "false"; nNotes.contentEditable = "false"; }
@@ -2589,7 +2590,7 @@ function renderTodoItemsEditor(item, opts){
     const dateKey = t.done ? "doneAt" : "date";
     wrapDateField(dateInput, t.done ? t.doneAt : t.date, t.done ? "Completed date" : "Target date");
     dateInput.onchange = (e) => updateTodo(item, t.id, dateKey, e.target.value || "");
-    const notesLine = createRichTextLine(t.notes || "", "Add a note…", "todo-eyebrow");
+    const notesLine = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow");
     r.querySelector('[data-holder="notes"]').appendChild(notesLine);
     bindCommitRich(notesLine, v => updateTodo(item, t.id, "notes", v));
     if(t.locked){
