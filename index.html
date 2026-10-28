@@ -733,6 +733,14 @@
   .notes-date-label{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color: var(--text-faint); }
   .todo-title-tag{ display:inline-block; font-size:10px; letter-spacing:.07em; text-transform:uppercase; color: var(--text-faint); border:1px solid var(--line, #c5d0dc); border-radius:999px; padding:0 7px; margin-bottom:3px; cursor:pointer; }
   .todo-title-tag:hover{ color: var(--ink); border-color: var(--ink); }
+  /* tighter to-do / note lists; dates sit right after the wording; empty "Add a note" line only on hover */
+  .todo-items{ margin-top:4px; }
+  .todo-item-row{ padding:4px 0; }
+  .todo-item-row.is-done{ padding-top:2px; padding-bottom:2px; }
+  .todo-done-date, .todo-row-date{ margin:0 0 0 12px !important; }
+  .todo-items .todo-item-row:not(:hover):not(:focus-within) .todo-eyebrow:empty{ display:none; }
+  .todo-add-wrap{ margin-top:2px; }
+  .todo-sub-head{ margin-top:10px; padding-top:10px; }
 </style>
 
 </head>
@@ -1405,6 +1413,16 @@ function normalizeOrder(boot){
     for(const it of [...d.items, d.general].filter(Boolean)) for(const t of (it.todos || [])){
       if(t.done && t.kind !== "note" && !t.pastDone){ t.pastDone = true; const nt = pastTenseTodo(t.text); if(nt !== t.text){ t.textOpen = t.text; t.text = nt; } }
     }
+  }
+  // One spelling per title: to-dos, documents and pinned headings that name the same title (ignoring case/markup) use the estate's own entry.
+  const tkey = (x) => stripTags(x).trim().toLowerCase().replace(/\s+/g, " ");
+  for(const it of [...d.items, d.general].filter(Boolean)){
+    const canon = new Map();
+    for(const t of (it.titles || [])){ const k = tkey(t); if(k && !canon.has(k)) canon.set(k, t); }
+    const fix = (x) => { if(!x.title) return; const k = tkey(x.title); if(!k) return; if(!canon.has(k)) canon.set(k, x.title); if(x.title !== canon.get(k)) x.title = canon.get(k); };
+    for(const t of (it.todos || [])) fix(t);
+    for(const t of (it.documents || [])) fix(t);
+    if(Array.isArray(it.actionTitles)){ const seen = new Set(); it.actionTitles = it.actionTitles.map(t => canon.get(tkey(t)) || t).filter(t => { const k = tkey(t); if(seen.has(k)) return false; seen.add(k); return true; }); }
   }
   d.items.sort((a, b) => cmp(a.name, b.name));
   for(const it of d.items) if(Array.isArray(it.titles)) it.titles.sort(cmp);
@@ -2473,10 +2491,10 @@ function renderTodoItemsEditor(item, opts){
   const wrap = el(`<div class="todo-items"></div>`);
   const showTag = !onlyTitle && !exact && item.id !== GENERAL_ID;
   const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? (t.title || "") === onlyTitle : (!onlyTitle || !t.title || t.title === onlyTitle)));
-  // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, oldest first.
+  // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, newest first.
   const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
   const logRows = base.map((t, i) => ({ t, i })).filter(x => x.t.kind === "note" || (x.t.done && isRecentDone(x.t)))
-    .sort((a, b) => { const da = logDate(a.t), db = logDate(b.t); return da < db ? -1 : da > db ? 1 : a.i - b.i; }).map(x => x.t);
+    .sort((a, b) => { const da = logDate(a.t), db = logDate(b.t); return da < db ? 1 : da > db ? -1 : b.i - a.i; }).map(x => x.t);
   const buildNoteRow = (t) => {
     const r = el(`
       <div class="todo-item-row is-note ${t.locked ? "is-locked" : ""}">
@@ -4263,12 +4281,12 @@ function renderItemDetail(itemId){
 
   wrap.appendChild(renderNotesPanel(item));
 
+  wrap.appendChild(renderTodoProgressPanel(item));
+
   wrap.appendChild(renderDocumentsPanel(item));
 
   const followUpPanel = renderStepsPanel(item, true);
   if(followUpPanel) wrap.appendChild(followUpPanel);
-
-  wrap.appendChild(renderTodoProgressPanel(item));
 
   wrap.appendChild(renderTitleDetailsPanel(item));
 
