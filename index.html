@@ -2379,12 +2379,18 @@ function todoSections(item){
   const untagged = vis.some(t => !t.title);
   if(!tagged.length || (tagged.length === 1 && !untagged && vis.some(t => t.title === tagged[0]))) return null;
   const secs = [];
+  let mergeInto = null;
   if(untagged){
     const own = stripTags(item.todoTitleLabel || "").trim();
     const rest = orderedTitleList(item).filter(t => !tagged.includes(t)).map(t => stripTags(t)).filter(Boolean);
-    secs.push({ tag: "", label: (own || rest.join(" / ")).toUpperCase() });
+    const label = (own || rest.join(" / ")).toUpperCase();
+    // Items with no title belong with the title they are headed by: same heading as a titled section, or the estate's only title.
+    const same = tagged.find(t => stripTags(t).trim().toUpperCase() === label.trim());
+    const onlyTitle = (item.titles || []).filter(t => stripTags(t)).length === 1 && tagged.length === 1 ? tagged[0] : null;
+    mergeInto = same || (!label ? onlyTitle : null) || null;
+    if(!mergeInto) secs.push({ tag: "", label });
   }
-  for(const t of tagged) secs.push({ tag: t, label: stripTags(t).toUpperCase() });
+  for(const t of tagged) secs.push({ tag: t, label: stripTags(t).toUpperCase(), withUntagged: t === mergeInto });
   secs.sort((a, b) => byName(a.label || item.name, b.label || item.name));
   return secs;
 }
@@ -2486,11 +2492,12 @@ function renderTodoItemsEditor(item, opts){
   migrateTodos(item);
   const onlyTitle = opts && opts.title ? opts.title : "";
   const exact = !!(opts && opts.exact);
+  const withUntagged = !!(opts && opts.withUntagged);
   const addKey = exact ? item.id + "|" + onlyTitle : item.id;
   const canTitle = item.id !== GENERAL_ID && !(onlyTitle && !exact);
   const wrap = el(`<div class="todo-items"></div>`);
   const showTag = !onlyTitle && !exact && item.id !== GENERAL_ID;
-  const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? (t.title || "") === onlyTitle : (!onlyTitle || !t.title || t.title === onlyTitle)));
+  const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || !t.title || t.title === onlyTitle)));
   // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, newest first.
   const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
   const logRows = base.map((t, i) => ({ t, i })).filter(x => x.t.kind === "note" || (x.t.done && isRecentDone(x.t)))
@@ -2747,7 +2754,7 @@ function buildTodoDocHTML(items, heading, editable){
         }
         if(lines.length) h += `<ul data-ul="notes" style="list-style-type:circle;padding-left:24px;margin:2px 0;">${lineLis(lines)}</ul>`;
       }
-      const todos = sortedTodos(openTodos(item)).filter(t => !secs || (t.title || "") === sec.tag);
+      const todos = sortedTodos(openTodos(item)).filter(t => !secs || (t.title || "") === sec.tag || (sec.withUntagged && !t.title));
       if(todos.length){
         h += `<ul data-ul="todos" style="list-style-type:square;padding-left:24px;margin:2px 0;">`;
         for(const t of todos) h += todoLi(item, t, "");
@@ -3482,7 +3489,7 @@ function renderTodoTab(){
     else secs.forEach((sec, i) => {
       if(!i){
         const first = el(`<div class="todo-sec-first"></div>`);
-        first.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true }));
+        first.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true, withUntagged: sec.withUntagged }));
         itemsHolder.appendChild(first);
         return;
       }
@@ -3501,14 +3508,14 @@ function renderTodoTab(){
         if(now) todoCollapsed.add(key); else todoCollapsed.delete(key);
         saveCollapsed(); syncCollapseAll();
       });
-      if(sec.tag && !item.todos.some(t => t.title === sec.tag && !richIsEmpty(t.text))){
+      if(sec.tag && !item.todos.some(t => (t.title === sec.tag || (sec.withUntagged && !t.title)) && !richIsEmpty(t.text))){
         const rm = el(`<button class="btn btn-sm btn-ghost todo-entry-remove" type="button" title="Take this empty title off the Action List (it stays on the estate)">Remove</button>`);
         rm.onclick = () => { item.actionTitles = (item.actionTitles || []).filter(t => t !== sec.tag); scheduleSave(); render(); };
         sh.appendChild(rm);
       }
       box.appendChild(sh);
       const body = el(`<div class="todo-sec-body"></div>`);
-      body.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true }));
+      body.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true, withUntagged: sec.withUntagged }));
       box.appendChild(body);
       itemsHolder.appendChild(box);
     });
