@@ -1615,8 +1615,12 @@ function ensureFollowUpTodos(){
   const today = todayISO();
   let changed = false;
   for(const item of (STATE.data && STATE.data.items) || []){
+    // Follow-up dates the old version filled in automatically never become to-dos; only a date typed by hand does.
+    if(!item.holdFollowUpManual && Array.isArray(item.todos) && item.todos.some(t => t.followUp && !t.done)){
+      item.todos = item.todos.filter(t => !(t.followUp && !t.done)); item.holdFollowUpTodoFor = ""; changed = true;
+    }
     const d = item.holdFollowUpDate;
-    if(item.estateCategory !== "hold" || !isValidDate(d) || d > today || item.holdFollowUpTodoFor === d) continue;
+    if(!item.holdFollowUpManual || item.estateCategory !== "hold" || !isValidDate(d) || d > today || item.holdFollowUpTodoFor === d) continue;
     migrateTodos(item);
     item.todos.push({ id: uid("tk"), text: escapeHtml(item.holdFollowUpLabel || "Follow up"), date: d, notes: "", done: false, createdAt: today, doneAt: "", title: "", followUp: true });
     item.holdFollowUpTodoFor = d;
@@ -1632,6 +1636,7 @@ function updateHoldFollowUpDate(item, value){
   const old = item.holdFollowUpDate || "";
   if(old === value) return;
   item.holdFollowUpDate = value;
+  item.holdFollowUpManual = !!value;
   recordChange(item.id, "item", item.id, item.name, "holdFollowUpDate", "Follow-up date", old, value);
   scheduleSave();
   render();
@@ -2484,7 +2489,8 @@ function todoTitlesLabel(item){
   if(own) return own.toUpperCase();
   if(Array.isArray(item.todos)){
     // Everything shown in the box (open, notes, recently completed) decides the heading, so finishing a to-do never changes it.
-    const open = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+    const open = item.todos.filter(t => !t.followUp && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+    if(!open.length && item.todos.some(t => t.followUp && !richIsEmpty(t.text))) return "";   // only a follow-up to-do: headed by the estate alone
     if(open.length && open.every(t => t.title)){
       const tagged = new Set(open.map(t => t.title));
       const ordered = (item.titles && item.titles.length ? orderedTitleList(item) : []).filter(t => tagged.has(t));
@@ -2499,7 +2505,7 @@ function todoTitlesLabel(item){
 function todoSections(item){
   if(!item || item.id === GENERAL_ID) return null;
   migrateTodos(item);
-  const vis = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+  const vis = item.todos.filter(t => !t.followUp && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
   // Titles added to this box without a to-do (item.actionTitles) still get a section.
   const pinned = (item.actionTitles || []).filter(t => (item.titles || []).includes(t));
   const tagged = Array.from(new Set(vis.filter(t => t.title).map(t => t.title).concat(pinned)));
@@ -3624,7 +3630,7 @@ function renderTodoTab(){
     else secs.forEach((sec, i) => {
       if(!i){
         const first = el(`<div class="todo-sec-first"></div>`);
-        first.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true, withUntagged: sec.withUntagged }));
+        first.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true, withUntagged: sec.withUntagged || (item.todos.some(t => t.followUp && !richIsEmpty(t.text)) && !secs.some(x => x.withUntagged || !x.tag)) }));
         itemsHolder.appendChild(first);
         return;
       }
