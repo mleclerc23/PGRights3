@@ -6136,7 +6136,7 @@ function buildEstateNotesBlock(item, opts){
   const paint = () => {
     holder.innerHTML = "";
     const has = !richIsEmpty(item.notes);
-    if(has && opts.forTitle && !editing){
+    if(opts.forTitle && !editing){
       // Title page: each note line is its own bullet with its own Edit / Delete; lines that name other titles of the estate are left to those pages.
       const all = splitRichLines(item.notes);
       const mine = [];
