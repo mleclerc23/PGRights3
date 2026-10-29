@@ -3863,6 +3863,61 @@ function openTitlePage(item, title){
   render();
   window.scrollTo(0, 0);
 }
+/** Every note that applies to one title, newest first, each editable: the estate's own note lines (that don't name other titles),
+ *  notes filed under this title on the Action List, and notes written here for a title that isn't on it. */
+function renderTitleNotesList(item, title){
+  const holder = el(`<div></div>`);
+  const entries = [];
+  // 1. estate-level note lines
+  const lines = splitRichLines(item.notes || "");
+  const estDate = notesEffectiveDate(item);
+  lines.forEach((ln, idx) => {
+    const m = mentionedTitles(item, stripTags(ln).replace(/&nbsp;/g, " "));
+    if(m.length && !m.includes(title)) return;
+    entries.push({ html: ln.replace(/^(\s|&nbsp;)+/i, ""), date: estDate,
+      setText: (v) => { const next = lines.slice(); if(v === null) next.splice(idx, 1); else next[idx] = v; const nv = next.join("<br>"); const old = item.notes || ""; item.notes = nv; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, nv); scheduleSave(); render(); },
+      del: () => { const next = lines.slice(); next.splice(idx, 1); const nv = next.join("<br>"); const old = item.notes || ""; item.notes = nv; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, nv); scheduleSave(); render(); } });
+  });
+  // 2. notes filed under this title on the Action List
+  for(const t of item.todos.filter(t => t.kind === "note" && !t.followUp && !richIsEmpty(t.text) && todoOnTitle(t, title, item))){
+    entries.push({ html: t.text, date: logDate(t), locked: t.locked,
+      setText: (v) => updateTodo(item, t.id, "text", v), setDate: (v) => updateTodo(item, t.id, "date", v), del: () => removeTodo(item, t.id) });
+  }
+  // 3. notes written on this page for a title that isn't on the Action List
+  for(const t of (item.titleNotes || []).filter(t => t.title === title && !richIsEmpty(t.text))){
+    const d = isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : "");
+    entries.push({ html: t.text, date: d,
+      setText: (v) => { t.text = v; scheduleSave(); render(); }, setDate: (v) => { t.date = v; scheduleSave(); render(); },
+      del: () => { item.titleNotes = item.titleNotes.filter(x => x.id !== t.id); scheduleSave(); render(); } });
+  }
+  entries.forEach((e, i) => e.i = i);
+  entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.i - b.i));
+  for(const e of entries){
+    const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button" data-role="nedit">Edit</button><button class="btn btn-sm btn-ghost" type="button" data-role="ndel">Delete</button></div></div>`);
+    const bullet = row.querySelector(".note-bullet"), dateEl = row.querySelector(".notes-date"), eb = row.querySelector('[data-role="nedit"]');
+    bullet.innerHTML = e.html;
+    dateEl.textContent = e.date ? fmtDateShort(e.date) : "";
+    if(e.locked){ eb.disabled = true; }
+    bindConfirmDelete(row.querySelector('[data-role="ndel"]'), e.del, "Delete");
+    let di = null;
+    eb.onclick = () => {
+      if(eb.dataset.on){
+        const v = sanitizeRichHTML(bullet.innerHTML).trim();
+        if(e.setDate && di && di.value !== (e.date || "")) e.setDate(di.value || "");
+        if(!v) e.del(); else if(v !== e.html) e.setText(v); else render();
+        return;
+      }
+      eb.dataset.on = "1"; eb.textContent = "Done";
+      bullet.contentEditable = "true"; bullet.style.outline = "2px solid var(--line, #c5d0dc)"; bullet.focus();
+      if(e.setDate){
+        di = document.createElement("input"); di.type = "date"; di.className = "step-note-date-input"; di.value = e.date || "";
+        dateEl.textContent = ""; dateEl.appendChild(di); wrapDateField(di, e.date || "", "Date");
+      }
+    };
+    holder.appendChild(row);
+  }
+  return holder;
+}
 function renderTitlePage(itemId, title){
   const item = STATE.data.items.find(i => i.id === itemId);
   if(!item || !(item.titles || []).includes(title)){
@@ -3916,20 +3971,7 @@ function renderTitlePage(itemId, title){
   `);
   const cl = buildContactLinesBox(item);
   if(cl.children.length) est.querySelector('[data-holder="contacts"]').appendChild(cl);
-  est.querySelector('[data-holder="notes"]').appendChild(buildEstateNotesBlock(item, { bullets: true, forTitle: title }));
-  { // notes written here for a title that isn't on the Action List
-    const stamp = (t) => (isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : ""));
-    const own = (item.titleNotes || []).filter(t => t.title === title && !richIsEmpty(t.text)).map(t => ({ t, del: () => { item.titleNotes = item.titleNotes.filter(x => x.id !== t.id); scheduleSave(); render(); } }))
-      .concat(item.todos.filter(t => t.kind === "note" && !t.followUp && !richIsEmpty(t.text) && todoOnTitle(t, title, item)).map(t => ({ t, del: () => removeTodo(item, t.id) })))
-      .sort((a, b) => (stamp(a.t) < stamp(b.t) ? 1 : stamp(a.t) > stamp(b.t) ? -1 : 0));
-    for(const { t, del } of own){
-      const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button" data-role="ndel">Delete</button></div></div>`);
-      row.querySelector(".note-bullet").innerHTML = t.text;
-      row.querySelector(".notes-date").textContent = stamp(t) ? fmtDateShort(stamp(t)) : "";
-      bindConfirmDelete(row.querySelector('[data-role="ndel"]'), del, "Delete");
-      est.querySelector(".panel-pad").appendChild(row);
-    }
-  }
+  est.querySelector('[data-holder="notes"]').appendChild(renderTitleNotesList(item, title));
   {
     const onList = titleOnActionList(item, title);
     const addWrap = el(`<div style="margin-top:10px;"><button class="todo-add-btn" type="button" data-role="n-toggle">+ Add note</button>
