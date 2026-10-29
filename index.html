@@ -1571,7 +1571,11 @@ function setTitleCategory(item, title, value){
   item.titleCategory[title] = value;
   recordChange(item.id, "item", item.id, item.name, "titleCategory", "Status of " + stripTags(title), estateCategoryLabel(old), estateCategoryLabel(value));
   const set = new Set(ts.map(t => item.titleCategory[t]));
-  if(set.size === 1){ updateEstateCategory(item, Array.from(set)[0], { keepTitles: true }); return; }   // all agree: the estate follows
+  if(set.size === 1){
+    const only = Array.from(set)[0];
+    if(item.estateCategory === only){ scheduleSave(); render(); return; }   // estate already shows this value: just redraw
+    updateEstateCategory(item, only, { keepTitles: true }); return;
+  }   // all agree: the estate follows
   item.estateCategory = "pursuing";   // mixed: the estate has no single status; it is listed with the ones being pursued
   scheduleSave(); render();
 }
@@ -2171,15 +2175,8 @@ function renderTitleIndex(){
             <div class="pulse-sub" data-estates></div>
           </div>
         </div>
-        <span>${cats.map(c => `<span class="pill pill-pending" style="margin-left:4px;">${escapeHtml(c)}</span>`).join("")}<button class="btn btn-sm btn-ghost" data-role="prio" type="button" style="margin-left:8px;"></button></span>
+        <span>${cats.map(c => `<span class="pill pill-pending" style="margin-left:4px;">${escapeHtml(c)}</span>`).join("")}</span>
       </div>`);
-    { // demote / promote: applies to every estate that carries this title
-      const isPrio = g.entries.some(e => isTitlePriority(e.item, e.title));
-      const pb = row.querySelector('[data-role="prio"]');
-      pb.textContent = isPrio ? "Demote" : "Make priority";
-      pb.title = isPrio ? "Take this title off the priority list" : "Add this title to the priority list";
-      pb.onclick = (ev) => { ev.stopPropagation(); for(const e of g.entries) setTitlePriority(e.item, e.title, !isPrio); };
-    }
     row.querySelector("[data-open]").onclick = () => openTitlePage(first.item, first.title);
     const sp = row.querySelector("[data-estates]");
     g.entries.forEach((e, i) => {
@@ -3821,13 +3818,17 @@ function renderTitlePage(itemId, title){
     <div class="title-page-head">
       <h1 class="title-page-name">${escapeHtml(stripTags(title))}</h1>
       <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
-      <select class="phase-status-select" id="t-category" style="margin-top:8px;">
-        ${ESTATE_CATEGORIES.map(([k, l]) => `<option value="${k}" ${titleCategoryOf(item, title) === k ? "selected" : ""}>${escapeHtml(l)}</option>`).join("")}
-      </select>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
+        <select class="phase-status-select" id="t-category">
+          ${ESTATE_CATEGORIES.map(([k, l]) => `<option value="${k}" ${titleCategoryOf(item, title) === k ? "selected" : ""}>${escapeHtml(l)}</option>`).join("")}
+        </select>
+        <button class="btn btn-sm ${isTitlePriority(item, title) ? "" : "btn-ghost"}" id="t-priority" type="button" ${titleCategoryOf(item, title)==="hold" ? "disabled" : ""} title="Priority titles are starred titles and estates' only titles. Titles on hold are never priority.">${titleCategoryOf(item, title)==="hold" ? "On hold - not priority" : isTitlePriority(item, title) ? "Priority title - demote" : "Make priority"}</button>
+      </div>
     </div>
   `);
   head.querySelector('[data-role="open"]').onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
   head.querySelector("#t-category").onchange = (e) => setTitleCategory(item, title, e.target.value);
+  head.querySelector("#t-priority").onclick = () => setTitlePriority(item, title, !isTitlePriority(item, title));
   wrap.appendChild(head);
 
   // To-Dos for this title (plus any that apply to the whole estate)
@@ -4825,6 +4826,7 @@ function migrateTitlePriority(item){
 /** A title is a priority when it is starred on its estate, or is the estate's only title - unless it has been demoted. */
 function isTitlePriority(item, title){
   migrateTitlePriority(item);
+  if(titleCategoryOf(item, title) === "hold") return false;   // titles on hold are never priority (a star is kept for when they return to Pursuing)
   if((item.demotedTitles || []).includes(title)) return false;
   if(item.priorityTitles.includes(title)) return true;
   return (item.titles || []).filter(t => stripTags(t)).length === 1;
