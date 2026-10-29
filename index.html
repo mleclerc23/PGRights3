@@ -2758,7 +2758,7 @@ function renderTodoItemsEditor(item, opts){
         <button class="ec-remove todo-remove" title="${t.locked ? "Unlock to delete" : "Delete note"}" data-role="remove" ${t.locked ? "disabled" : ""}>&times;</button>
       </div>
     `);
-    const line = createRichTextLine(t.text || "", "Write a note…", "todo-task-input");
+    const line = createRichTextLine(t.text || "", "Write a note…", "todo-task-input", true);
     r.querySelector('[data-holder="text"]').appendChild(line);
     bindCommitRich(line, v => updateTodo(item, t.id, "text", v));
     const nDate = r.querySelector('[data-role="date"]');
@@ -2837,7 +2837,7 @@ function renderTodoItemsEditor(item, opts){
         </div>
         ${canTitle ? `<input type="text" class="step-note-input" list="title-list-${item.id}" placeholder="Another title in this estate…" data-role="add-title" hidden />
         <datalist id="title-list-${item.id}">${(item.titles || []).map(t => `<option value="${escapeHtml(stripTags(t))}"></option>`).join("")}</datalist>` : ""}
-        <input type="text" class="step-note-input" placeholder="Add a to-do…" data-role="add-text" />
+        <textarea class="step-note-input" rows="1" placeholder="Add a to-do…" data-role="add-text" style="resize:none;overflow:hidden;font:inherit;"></textarea>
         <div class="todo-add-form-row">
           <input type="date" class="step-note-date-input" data-role="add-date" />
           <button class="btn btn-sm" data-role="add-submit" type="button">Add</button>
@@ -2887,7 +2887,10 @@ function renderTodoItemsEditor(item, opts){
   };
   add.querySelector('[data-role="add-submit"]').onclick = submit;
   add.querySelector('[data-role="add-close"]').onclick = () => { form.hidden = true; todoAddOpen.delete(addKey); };
-  addText.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); submit(); } });
+  const grow = () => { addText.style.height = "auto"; addText.style.height = addText.scrollHeight + "px"; };
+  addText.addEventListener("input", grow);
+  // To-dos: Return adds. Notes: Return starts a new line (Cmd/Ctrl+Return adds).
+  addText.addEventListener("keydown", (e) => { if(e.key === "Enter"){ if(mode === "note" && !(e.metaKey || e.ctrlKey)){ setTimeout(grow, 0); return; } e.preventDefault(); submit(); } });
   const addTitleInput = add.querySelector('[data-role="add-title"]');
   if(addTitleInput) addTitleInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); addText.focus(); } });
   if(todoAddFocus === addKey){
