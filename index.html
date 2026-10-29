@@ -775,6 +775,8 @@
   .title-notes-panel .todo-lines:empty + * .note-side{ margin-top:0; padding-top:0; border-top:0; }
   .title-notes-panel .note-side .td-readonly-text{ flex:1; min-width:0; margin-bottom:0; }
   .title-notes-panel .note-side .notes-date-row{ flex:0 0 auto; margin:2px 0 0; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .todo-entry-head:has(.todo-entry-titles.editing){ cursor:default; }
+  .todo-entry-head:has(.todo-entry-titles.editing) .todo-entry-name, .todo-entry-head:has(.todo-entry-titles.editing) .title-link{ pointer-events:none; text-decoration:none !important; }
   .about-facts{ gap:8px 26px !important; }
   .about-facts b{ display:inline !important; font-size:11px !important; font-weight:700 !important; color: var(--red) !important; margin:0 6px 0 0 !important; }
   .about-facts span{ font-size:13px; font-weight:400; color:#000; line-height:1.55; }
@@ -3460,7 +3462,7 @@ function renderTodoTab(){
       if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); insertLinkAtSelection(liveNotes); }
     });
     if(!isGeneral) entry.querySelector('[data-holder="items"]').before(liveNotes);
-    entry.querySelector('[data-role="open"]').onclick = () => { if(isGeneral) return; STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+    entry.querySelector('[data-role="open"]').onclick = (ev) => { if(isGeneral) return; if(ev && ev.target && ev.target.closest && ev.target.closest(".todo-entry-titles.editing")) return; if(entry.querySelector(".todo-entry-titles.editing")) return; STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
     const tEl = entry.querySelector(".todo-entry-titles");
     if(tEl){
       const known = (item.titles || []).filter(t => stripTags(t));
