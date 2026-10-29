@@ -243,6 +243,9 @@
   [data-role="list"] > .todo-entry:first-child{ padding-top:0; margin-top:-8px; }
   .progress-row{ display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-top:1px solid var(--border-soft); }
   .progress-row:first-child{ border-top:none; padding-top:0; }
+  .progress-when .date-field-display{ color: var(--text-faint) !important; font-family: var(--font-mono); font-size:11px; }
+  .progress-delete{ font-size:15px; padding:0 8px; }
+  .progress-when .date-field, .progress-when .date-field *{ opacity:1 !important; }
   .progress-when .date-field{ margin-top:2px; min-width:128px; } .progress-when .date-field-display{ white-space:nowrap; }
   .progress-when{ flex:0 0 190px; font-family: var(--font-mono); font-size:11px; color: var(--text-faint); padding-top:2px; }
   .progress-body{ flex:1; min-width:0; }
@@ -775,6 +778,10 @@
   .title-notes-panel .note-side{ display:flex; align-items:flex-start; gap:18px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line, #d5dde6); }
   .title-notes-panel .todo-lines:empty + * .note-side{ margin-top:0; padding-top:0; border-top:0; }
   .title-notes-panel .note-side .td-readonly-text{ flex:1; min-width:0; margin-bottom:0; }
+  .title-notes-panel .nt-actions{ gap:4px !important; }
+  .title-notes-panel .nt-actions .notes-date{ margin-right:6px; }
+  .nt-btn{ font-size:11px !important; padding:1px 6px !important; min-height:0 !important; line-height:1.4; }
+  .nt-btn.nt-x{ font-size:15px !important; padding:0 6px !important; }
   .title-notes-panel .note-side .notes-date-row{ flex:0 0 auto; margin:0; display:flex; flex-direction:row; align-items:center; gap:10px; white-space:nowrap; }
   .todo-entry-head:has(.todo-entry-titles.editing){ cursor:default; }
   .todo-entry-head:has(.todo-entry-titles.editing) .todo-entry-name, .todo-entry-head:has(.todo-entry-titles.editing) .title-link{ pointer-events:none; text-decoration:none !important; }
@@ -2901,10 +2908,9 @@ function buildProgressRow(item, t, opts){
         ${!isNote && isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
       </div>
       ${t.urgent && !t.done ? `<span class="pill pill-urgent">URGENT</span>` : ""}
-      ${(!isNote && t.done) ? "" : `<span class="pill pill-pending">${isNote ? "note" : "open"}</span>`}
       ${t.done && !t.locked ? `<button class="btn btn-sm btn-ghost" data-role="reopen">Reopen</button>` : ""}
-      ${t.done ? lockButtonHTML(t) : ""}
-      <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>Delete</button>
+      ${lockButtonHTML(t)}
+      <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>&times;</button>
     </div>
   `);
   // Finished to-dos and notes stay editable here without reopening: the wording, and the date they were completed / written.
@@ -2914,11 +2920,11 @@ function buildProgressRow(item, t, opts){
     if(t.locked) line.contentEditable = "false";
     txt.replaceWith(line);
     bindCommitRich(line, v => updateTodo(item, t.id, "text", v));
-    if((t.done || isNote) && !t.locked){
+    if(t.done || isNote){
       const whenEl = row.querySelector(".progress-when");
       const key = isNote ? "date" : "doneAt";
       const cur = isNote ? (isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : "")) : (isValidDate(t.doneAt) ? t.doneAt : "");
-      whenEl.innerHTML = `<span>${isNote ? "Note" : "Done"}</span><input type="date" class="step-note-date-input" value="${cur}" />`;
+      whenEl.innerHTML = `<span>${isNote ? "Note" : "Done"}</span><input type="date" class="step-note-date-input" value="${cur}" ${t.locked ? "disabled" : ""} />`;
       const di = whenEl.querySelector("input");
       wrapDateField(di, cur, isNote ? "Date" : "Date done");
       di.onchange = (e) => updateTodo(item, t.id, key, e.target.value || "");
@@ -2927,7 +2933,7 @@ function buildProgressRow(item, t, opts){
   if(opts && opts.showTitle && t.title) row.querySelector('[data-holder="ptag"]').appendChild(titleTagEl(item, t.title));
   const reopen = row.querySelector('[data-role="reopen"]');
   if(reopen) reopen.onclick = () => updateTodo(item, t.id, "done", false);
-  bindConfirmDelete(row.querySelector('[data-role="pdelete"]'), () => removeTodo(item, t.id), "Delete");
+  bindConfirmDelete(row.querySelector('[data-role="pdelete"]'), () => removeTodo(item, t.id), "&times;", "Delete?");
   const lockBtn = row.querySelector('[data-role="lock"]');
   if(lockBtn) lockBtn.onclick = () => updateTodo(item, t.id, "locked", !t.locked);
   return row;
@@ -3893,12 +3899,12 @@ function renderTitleNotesList(item, title){
   entries.forEach((e, i) => e.i = i);
   entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.i - b.i));
   for(const e of entries){
-    const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button" data-role="nedit">Edit</button><button class="btn btn-sm btn-ghost" type="button" data-role="ndel">Delete</button></div></div>`);
+    const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row nt-actions"><span class="notes-date"></span><button class="btn btn-ghost nt-btn" type="button" data-role="nedit">Edit</button><button class="btn btn-ghost nt-btn nt-x" type="button" data-role="ndel" title="Delete note">&times;</button></div></div>`);
     const bullet = row.querySelector(".note-bullet"), dateEl = row.querySelector(".notes-date"), eb = row.querySelector('[data-role="nedit"]');
     bullet.innerHTML = e.html;
     dateEl.textContent = e.date ? fmtDateShort(e.date) : "";
     if(e.locked){ eb.disabled = true; }
-    bindConfirmDelete(row.querySelector('[data-role="ndel"]'), e.del, "Delete");
+    bindConfirmDelete(row.querySelector('[data-role="ndel"]'), e.del, "&times;", "Delete?");
     let di = null;
     eb.onclick = () => {
       if(eb.dataset.on){
