@@ -5030,7 +5030,6 @@ function renderEstateContactSection(item, opts){
   migrateEstateContacts(item);
   const locked = !!item.estateContactsLocked;
   const wrap = el(`<div><div style="display:flex;align-items:center;gap:8px;">${(opts && opts.noLabel) ? "" : `<span class="field-label">Estate Contacts</span>`}<button class="todo-lock ${locked ? "on" : ""}" type="button" data-role="ec-lock" title="${locked ? "Locked (read-only) - click to unlock and edit" : "Lock (make read-only)"}">${lockIconSVG(locked)}</button></div><div id="ec-contacts" class="ec-contacts-row"></div></div>`);
-  if(locked) wrap.classList.add("ec-locked");
   wrap.querySelector('[data-role="ec-lock"]').onclick = () => { item.estateContactsLocked = !item.estateContactsLocked; scheduleSave(); render(); };
   const holder = wrap.querySelector("#ec-contacts");
   item.estateContacts.forEach((ec, idx) => {
