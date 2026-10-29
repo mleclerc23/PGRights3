@@ -1401,12 +1401,14 @@ async function loadData(){
     if(res.ok){
       const body = await res.json();
       if(body && body.data){
+        syncBaseStr = JSON.stringify(body.data);   // exactly what the server holds right now
         migrateLegacyStepFieldNames(body.data);
         if(applyRightsAvailableImport(body.data)){
           try{ await fetch(API_URL, { method: "POST", headers: API_HEADERS, body: JSON.stringify({ data: body.data }) }); }catch(e){}
         }
         return body.data;
       }
+      if(body && body.data === null){ syncBaseStr = null; syncLoadFailed = false; const seeded0 = seedData(); applyRightsAvailableImport(seeded0); return seeded0; }   // genuinely empty store
     }
   }catch(e){ /* network/API not reachable yet, or a transient failure —
     either way, DO NOT persist seed data here. A failed/empty fetch is not
@@ -1414,6 +1416,7 @@ async function loadData(){
     destroying real data. Only an actual user edit (scheduleSave) should
     ever write to storage. */
   }
+  syncLoadFailed = true;   // couldn't read the shared data: never save over it until we can
   const seeded = seedData(); applyRightsAvailableImport(seeded); return seeded;
 }
 /* Undo / redo: every change that reaches scheduleSave() is remembered as a whole-data snapshot. */
@@ -1512,20 +1515,136 @@ function normalizeOrder(boot){
   d.items.sort((a, b) => cmp(a.name, b.name));
   for(const it of d.items) if(Array.isArray(it.titles)) it.titles.sort(cmp);
 }
+/* ---- Shared saving: several people can edit at once without overwriting each other ----
+ * The page remembers what the server held when it last synced (syncBaseStr). Before each save it re-reads the server copy; if someone
+ * else saved in the meantime, their changes and ours are merged (estates, to-dos, notes, documents and titles are matched by id,
+ * lists of names are combined) instead of one copy replacing the other. */
+let syncBaseStr = null, syncLoadFailed = false, syncBusy = false, syncDirty = false, syncDeferSince = 0, syncPollTimer = null;
+const m3eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const m3obj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const m3ids = (arr) => arr.length > 0 && arr.every(x => m3obj(x) && typeof x.id === "string");
+function m3setMerge(b, m, t){
+  const bs = new Set(b), ms = new Set(m), ts = new Set(t);
+  const out = t.filter(x => !(bs.has(x) && !ms.has(x)));        // keep theirs unless I removed it
+  for(const x of m) if(!ts.has(x) && !bs.has(x)) out.push(x);    // add what I added
+  return out;
+}
+function m3byId(b, m, t){
+  const bm = new Map(b.filter(x => m3obj(x) && x.id).map(x => [x.id, x])), mm = new Map(m.map(x => [x.id, x])), tm = new Map(t.map(x => [x.id, x]));
+  const out = [];
+  for(const tx of t){
+    const bx = bm.get(tx.id), mx = mm.get(tx.id);
+    if(mx) out.push(m3(bx, mx, tx));
+    else if(bx){ if(!m3eq(tx, bx)) out.push(tx); }               // I deleted it: gone unless they changed it meanwhile
+    else out.push(tx);                                            // their new item
+  }
+  for(let i = 0; i < m.length; i++){
+    const mx = m[i];
+    if(tm.has(mx.id)) continue;
+    const bx = bm.get(mx.id);
+    if(bx && m3eq(mx, bx)) continue;                               // they deleted it and I never touched it
+    let at = 0;
+    for(let j = i - 1; j >= 0; j--){ const pi = out.findIndex(r => r.id === m[j].id); if(pi >= 0){ at = pi + 1; break; } }
+    out.splice(at, 0, mx);                                         // my new (or edited) item, kept next to the one before it
+  }
+  return out;
+}
+/** three-way merge: b = what we last synced, m = mine (now), t = theirs (server now) */
+function m3(b, m, t){
+  if(m3eq(m, t)) return m;
+  if(m3eq(m, b)) return t;
+  if(m3eq(t, b)) return m;
+  if(Array.isArray(m) && Array.isArray(t)){
+    const bb = Array.isArray(b) ? b : [];
+    if((m3ids(m) || !m.length) && (m3ids(t) || !t.length) && (m.length || t.length)) return m3byId(bb, m, t);
+    if([...m, ...t].every(x => x === null || typeof x !== "object")) return m3setMerge(bb, m, t);
+    return m;
+  }
+  if(m3obj(m) && m3obj(t)){
+    const bb = m3obj(b) ? b : {};
+    const out = {};
+    const keys = Array.from(new Set([...Object.keys(m), ...Object.keys(t)]));
+    for(const k of keys){
+      const inM = k in m, inT = k in t, inB = k in bb;
+      if(!inM){ if(inB && m3eq(t[k], bb[k])) continue; out[k] = t[k]; continue; }
+      if(!inT){ if(inB && m3eq(m[k], bb[k])) continue; out[k] = m[k]; continue; }
+      if(k === "notes" && typeof m[k] === "string" && typeof t[k] === "string" && !m3eq(m[k], bb[k]) && !m3eq(t[k], bb[k])){
+        // both people edited the same estate's notes: combine them line by line so neither is lost
+        const sp = (x) => String(x || "").split(/<br\s*\/?>/i).map(z => z.trim()).filter(Boolean);
+        out[k] = m3setMerge(sp(bb[k]), sp(m[k]), sp(t[k])).join("<br>");
+        continue;
+      }
+      out[k] = m3(bb[k], m[k], t[k]);
+    }
+    return out;
+  }
+  return m;   // the very same value edited by both: mine (the person saving) wins
+}
+function syncEditingNow(){
+  const a = document.activeElement;
+  return !!(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable));
+}
+async function fetchServerData(){
+  try{
+    const r = await fetch(API_URL, { headers: API_HEADERS });
+    if(!r.ok) return undefined;
+    const body = await r.json();
+    return body ? body.data : undefined;
+  }catch(e){ return undefined; }
+}
+async function runSave(){
+  if(syncBusy){ saveTimer = setTimeout(runSave, 600); return; }
+  syncBusy = true;
+  let rerender = false;
+  try{
+    setSaveStatus("Saving…");
+    const theirs = await fetchServerData();
+    if(theirs === undefined){ setSaveStatus("Save failed"); saveTimer = setTimeout(runSave, 5000); return; }   // can't see the shared copy: don't write blind
+    const theirsStr = theirs ? JSON.stringify(theirs) : null;
+    if(syncLoadFailed){
+      if(theirs){
+        // we never managed to read the real data, so what's on screen is only starter data: load the real data instead of overwriting it
+        STATE.data = theirs; syncBaseStr = theirsStr; syncLoadFailed = false; syncDirty = false; normalizeOrder(true); undoReset(); render();
+        setSaveStatus("Saved"); showToast("Reconnected - loaded the latest shared data.");
+        return;
+      }
+      syncLoadFailed = false; syncBaseStr = null;
+    }
+    if(theirsStr !== null && syncBaseStr !== null && theirsStr !== syncBaseStr){
+      // someone else saved since we last synced
+      if(syncEditingNow() && (Date.now() - (syncDeferSince || (syncDeferSince = Date.now()))) < 12000){ saveTimer = setTimeout(runSave, 1500); return; }
+      STATE.data = m3(JSON.parse(syncBaseStr), STATE.data, theirs);
+      normalizeOrder();
+      undoReset();
+      rerender = true;
+    }
+    syncDeferSince = 0;
+    const sentStr = JSON.stringify(STATE.data);
+    const res = await fetch(API_URL, { method: "POST", headers: API_HEADERS, body: JSON.stringify({ data: STATE.data }) });
+    if(res.ok){ syncBaseStr = sentStr; syncDirty = (JSON.stringify(STATE.data) !== sentStr); setSaveStatus("Saved"); }
+    else setSaveStatus("Save failed");
+    if(rerender && !syncEditingNow()) render();
+  }catch(e){
+    setSaveStatus("Save failed");
+  }finally{ syncBusy = false; }
+}
+/** Pull in other people's changes while we have nothing of our own waiting to be saved. */
+async function pollShared(){
+  if(document.hidden || syncLoadFailed || syncBusy || syncDirty || !STATE.data || syncEditingNow()) return;
+  const theirs = await fetchServerData();
+  if(!theirs || syncBusy || syncDirty || syncEditingNow()) return;
+  const theirsStr = JSON.stringify(theirs);
+  if(theirsStr === syncBaseStr) return;
+  STATE.data = theirs; syncBaseStr = theirsStr;
+  normalizeOrder(); undoReset(); render();
+}
 function scheduleSave(){
   normalizeOrder();
   trackUndo();
+  syncDirty = true;
   setSaveStatus("Editing…");
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    setSaveStatus("Saving…");
-    try{
-      const res = await fetch(API_URL, { method: "POST", headers: API_HEADERS, body: JSON.stringify({ data: STATE.data }) });
-      setSaveStatus(res.ok ? "Saved" : "Save failed");
-    }catch(e){
-      setSaveStatus("Save failed");
-    }
-  }, 900);
+  saveTimer = setTimeout(runSave, 900);
 }
 function setSaveStatus(text){
   const wrap = document.getElementById("save-status");
@@ -3893,20 +4012,29 @@ function collectTitleNoteEntries(item, title){
     const own = item.noteLineDates && isValidDate(item.noteLineDates[k]) ? item.noteLineDates[k] : "";
     const write = (next) => { const nv = next.join("<br>"); const old = item.notes || ""; item.notes = nv; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, nv); scheduleSave(); render(); };
     entries.push({ html: ln.replace(/^(\s|&nbsp;)+/i, ""), date: own || estDate, estateLine: true,
-      setText: (v) => { const next = lines.slice(); next[idx] = v; if(own){ const nk = lkey(v); item.noteLineDates[nk] = own; if(nk !== k) delete item.noteLineDates[k]; } write(next); },
+      setText: (v, d) => {
+        // line breaks typed inside one note are kept as soft breaks, so the note stays ONE note (and keeps its date)
+        const inner = String(v).replace(/<br\s*\/?>/gi, '<br class="nl">');
+        const next = lines.slice(); next[idx] = inner;
+        const nd = d !== undefined ? d : own, nk = lkey(inner);
+        if(!item.noteLineDates) item.noteLineDates = {};
+        if(nk !== k) delete item.noteLineDates[k];
+        if(nd) item.noteLineDates[nk] = nd; else delete item.noteLineDates[nk];
+        write(next);
+      },
       setDate: (v) => { if(!item.noteLineDates) item.noteLineDates = {}; if(v) item.noteLineDates[k] = v; else delete item.noteLineDates[k]; scheduleSave(); render(); },
       del: () => { const next = lines.slice(); next.splice(idx, 1); if(item.noteLineDates) delete item.noteLineDates[k]; write(next); } });
   });
   // 2. notes filed under this title on the Action List
   for(const t of item.todos.filter(t => t.kind === "note" && !t.followUp && !richIsEmpty(t.text) && todoOnTitle(t, title, item))){
     entries.push({ html: t.text, date: logDate(t), locked: t.locked, todoId: t.id,
-      setText: (v) => updateTodo(item, t.id, "text", v), setDate: (v) => updateTodo(item, t.id, "date", v), del: () => removeTodo(item, t.id) });
+      setText: (v, d) => { updateTodo(item, t.id, "text", v); if(d !== undefined) updateTodo(item, t.id, "date", d); }, setDate: (v) => updateTodo(item, t.id, "date", v), del: () => removeTodo(item, t.id) });
   }
   // 3. notes written on this page for a title that isn't on the Action List
   for(const t of (item.titleNotes || []).filter(t => t.title === title && !richIsEmpty(t.text))){
     const d = isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : "");
     entries.push({ html: t.text, date: d,
-      setText: (v) => { t.text = v; scheduleSave(); render(); }, setDate: (v) => { t.date = v; scheduleSave(); render(); },
+      setText: (v, d) => { t.text = v; if(d !== undefined) t.date = d; scheduleSave(); render(); }, setDate: (v) => { t.date = v; scheduleSave(); render(); },
       del: () => { item.titleNotes = item.titleNotes.filter(x => x.id !== t.id); scheduleSave(); render(); } });
   }
   entries.forEach((e, i) => e.i = i);
@@ -3927,8 +4055,11 @@ function renderTitleNotesList(item, title){
     eb.onclick = () => {
       if(eb.dataset.on){
         const v = sanitizeRichHTML(bullet.innerHTML).trim();
-        if(e.setDate && di && di.value !== (e.date || "")) e.setDate(di.value || "");
-        if(!v) e.del(); else if(v !== e.html) e.setText(v); else render();
+        const dateChanged = !!(e.setDate && di && di.value !== (e.date || ""));
+        if(!v) e.del();
+        else if(v !== e.html) e.setText(v, dateChanged ? (di.value || "") : undefined);
+        else if(dateChanged) e.setDate(di.value || "");
+        else render();
         return;
       }
       eb.dataset.on = "1"; eb.textContent = "Done";
@@ -5030,6 +5161,7 @@ function renderEstateContactSection(item, opts){
   migrateEstateContacts(item);
   const locked = !!item.estateContactsLocked;
   const wrap = el(`<div><div style="display:flex;align-items:center;gap:8px;">${(opts && opts.noLabel) ? "" : `<span class="field-label">Estate Contacts</span>`}<button class="todo-lock ${locked ? "on" : ""}" type="button" data-role="ec-lock" title="${locked ? "Locked (read-only) - click to unlock and edit" : "Lock (make read-only)"}">${lockIconSVG(locked)}</button></div><div id="ec-contacts" class="ec-contacts-row"></div></div>`);
+  if(locked) wrap.classList.add("ec-locked");
   wrap.querySelector('[data-role="ec-lock"]').onclick = () => { item.estateContactsLocked = !item.estateContactsLocked; scheduleSave(); render(); };
   const holder = wrap.querySelector("#ec-contacts");
   item.estateContacts.forEach((ec, idx) => {
@@ -6568,6 +6700,9 @@ function showAccessGate(onUnlock){
     undoReset();
     try{ applyNav(history.state); }catch(e){}   // a refresh stays on the same page
     render();
+    if(syncLoadFailed) setSaveStatus("Couldn't reach storage - not saving");
+    clearInterval(syncPollTimer); syncPollTimer = setInterval(pollShared, 20000);
+    document.addEventListener("visibilitychange", () => { if(!document.hidden) pollShared(); });
   });
 })();
 
