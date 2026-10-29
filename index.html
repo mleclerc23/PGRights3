@@ -1445,6 +1445,15 @@ function normalizeOrder(boot){
     else if(it.notesCreatedAt || it.notesDate){ it.notesCreatedAt = ""; it.notesDate = ""; }
   }
   for(const it of d.items) if(typeof it.notes === "string" && it.notes.includes("Notes carried over from steps")) migrateCarriedStepNotes(it);
+  // The Follow-Up panel is gone: notes that were written in it become ordinary notes on the estate.
+  for(const it of d.items){
+    const fl = it.stepNotes && it.stepNotes["__hold_followup__"];
+    if(Array.isArray(fl) && fl.length){
+      migrateTodos(it);
+      for(const n of fl){ if(richIsEmpty(n.text)) continue; it.todos.push({ id: uid("tk"), text: n.text, date: isValidDate(n.date) ? n.date : "", notes: "", done: false, createdAt: (n.createdAt || "").slice(0, 10) || todayISO(), doneAt: "", title: "", kind: "note" }); }
+      it.stepNotes["__hold_followup__"] = [];
+    }
+  }
   const cmp = (a, b) => { const ka = sortKey(a), kb = sortKey(b); return ka === kb ? 0 : !ka ? 1 : !kb ? -1 : ka.localeCompare(kb); };
   if(boot){   // one-time: to-dos already completed read as progress too (the original wording is kept for "Reopen")
     for(const it of [...d.items, d.general].filter(Boolean)) for(const t of (it.todos || [])){
@@ -4540,9 +4549,6 @@ function renderItemDetail(itemId){
   wrap.appendChild(renderTodoProgressPanel(item));
 
   wrap.appendChild(renderDocumentsPanel(item));
-
-  const followUpPanel = renderStepsPanel(item, true);
-  if(followUpPanel) wrap.appendChild(followUpPanel);
 
   wrap.appendChild(renderTitleDetailsPanel(item));
 
