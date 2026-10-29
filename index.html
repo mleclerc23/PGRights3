@@ -2426,7 +2426,16 @@ function todoOnTitle(t, title, item){
   if(!t.title || t.title === title) return true;
   if(!item) return false;
   const m = matchTitlesIn(item, t.title);
-  return !!m && m.includes(title);
+  if(m && m.includes(title)) return true;
+  // The Action List box is headed with several titles ("Z-Cars / Softly, Softly"): what is in it applies to each of them.
+  const own = stripTags(item.todoTitleLabel || "").trim();
+  if(own && m && m.length){
+    const L = matchTitlesIn(item, own);
+    // only when everything titled in this estate's list sits inside that heading (no separate per-title sections)
+    if(L && L.length > 1 && L.includes(title) && m.some(x => L.includes(x)) &&
+       (item.todos || []).every(x => !x.title || (matchTitlesIn(item, x.title) || []).every(y => L.includes(y)))) return true;
+  }
+  return false;
 }
 function todoTitlesLabel(item){
   const own = stripTags(item.todoTitleLabel || "").trim();
