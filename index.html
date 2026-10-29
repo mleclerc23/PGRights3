@@ -2341,7 +2341,7 @@ function addTitleNote(item, title, text, date){
     return;
   }
   if(!Array.isArray(item.titleNotes)) item.titleNotes = [];
-  item.titleNotes.push({ id: uid("tn"), title, text: escapeHtml(value), date: date || "", createdAt: todayISO() });
+  item.titleNotes.push({ id: uid("tn"), title, text: escapeHtml(value).replace(/\n/g, "<br>"), date: date || "", createdAt: todayISO() });
   item.updatedAt = new Date().toISOString();
   recordChange(item.id, "item", item.id, item.name, "noteAdd", "Note added", "", value);
   scheduleSave();
@@ -2389,7 +2389,7 @@ function addTodo(item, text, date, title, kind){
   if(!value) return;
   migrateTodos(item);
   item.actionHidden = false;
-  const rec = { id: uid("tk"), text: escapeHtml(value), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
+  const rec = { id: uid("tk"), text: escapeHtml(value).replace(/\n/g, "<br>"), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
   if(kind === "note") rec.kind = "note";
   item.todos.push(rec);
   recordChange(item.id, "item", item.id, item.name, kind === "note" ? "noteAdd" : "todoAdd", kind === "note" ? "Note added" : "To-do added", "", value);
@@ -2922,7 +2922,7 @@ function buildProgressRow(item, t, opts){
   // Finished to-dos and notes stay editable here without reopening: the wording, and the date they were completed / written.
   {
     const txt = row.querySelector(".progress-text");
-    const line = createRichTextLine(t.text || "", "Write it out…", "progress-text" + (t.done ? " is-done" : ""));
+    const line = createRichTextLine(t.text || "", "Write it out…", "progress-text" + (t.done ? " is-done" : ""), isNote);
     if(t.locked) line.contentEditable = "false";
     txt.replaceWith(line);
     bindCommitRich(line, v => updateTodo(item, t.id, "text", v));
@@ -3930,6 +3930,7 @@ function renderTitleNotesList(item, title){
       }
       eb.dataset.on = "1"; eb.textContent = "Done";
       bullet.contentEditable = "true"; bullet.style.outline = "2px solid var(--line, #c5d0dc)"; bullet.focus();
+      bullet.addEventListener("keydown", (ke) => { if(ke.key === "Enter"){ ke.preventDefault(); document.execCommand("insertLineBreak"); } });
       if(e.setDate){
         di = document.createElement("input"); di.type = "date"; di.className = "step-note-date-input"; di.value = e.date || "";
         dateEl.textContent = ""; dateEl.appendChild(di); wrapDateField(di, e.date || "", "Date");
@@ -3948,7 +3949,7 @@ function buildNoteEntryProgressRow(e){
       <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete">&times;</button>
     </div>
   `);
-  const line = createRichTextLine(e.html || "", "Write it out…", "progress-text");
+  const line = createRichTextLine(e.html || "", "Write it out…", "progress-text", true);
   row.querySelector(".progress-body").appendChild(line);
   bindCommitRich(line, v => { if(v.trim()) e.setText(v); });
   const di = row.querySelector("input");
@@ -4015,7 +4016,7 @@ function renderTitlePage(itemId, title){
     const onList = titleOnActionList(item, title);
     const addWrap = el(`<div style="margin-top:10px;"><button class="todo-add-btn" type="button" data-role="n-toggle">+ Add note</button>
       <div class="todo-add-form" data-role="n-form" hidden>
-        <input type="text" class="step-note-input" placeholder="Write a note…" data-role="n-text" />
+        <textarea class="step-note-input" rows="2" placeholder="Write a note…  (Return = new line)" data-role="n-text" style="resize:vertical;font:inherit;"></textarea>
         <div class="todo-add-form-row"><input type="date" class="step-note-date-input" data-role="n-date" /><button class="btn btn-sm" type="button" data-role="n-submit">Add</button><button class="btn btn-sm btn-ghost" type="button" data-role="n-close">Close</button></div>
         <div class="section-note" style="margin-top:4px;">${onList ? "This title is on the Action List, so the note will show there too." : "This title isn't on the Action List, so the note stays here in Notes."}</div>
       </div></div>`);
@@ -4025,7 +4026,7 @@ function renderTitlePage(itemId, title){
     addWrap.querySelector('[data-role="n-close"]').onclick = () => { form.hidden = true; };
     const go = () => { if(!nText.value.trim()){ nText.focus(); return; } addTitleNote(item, title, nText.value, nDate.value || ""); };
     addWrap.querySelector('[data-role="n-submit"]').onclick = go;
-    nText.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); go(); } });
+    nText.addEventListener("keydown", (e) => { if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ e.preventDefault(); go(); } });
     est.querySelector(".panel-pad").appendChild(addWrap);
   }
   wrap.appendChild(est);
@@ -4971,7 +4972,7 @@ function createRichTextEditor(initialHTML, placeholder, minHeight){
  * (text-input, td-title-input, detail-title, ec-line-input, inline-input…).
  * Enter commits (blurs) instead of inserting a line break, matching how a
  * real single-line input behaves. */
-function createRichTextLine(initialHTML, placeholder, className){
+function createRichTextLine(initialHTML, placeholder, className, multiline){
   const div = document.createElement("div");
   div.className = "rich-line" + (className ? " " + className : "");
   div.contentEditable = "true";
@@ -4986,7 +4987,7 @@ function createRichTextLine(initialHTML, placeholder, className){
     }
     if(e.key === "Enter"){
       e.preventDefault();
-      if(e.altKey || e.shiftKey){ document.execCommand("insertLineBreak"); return; }  // Option/Alt+Enter = new line
+      if(multiline || e.altKey || e.shiftKey){ document.execCommand("insertLineBreak"); return; }  // notes: Return = new line; to-dos: Option/Alt+Enter = new line
       div.blur();
     }
   });
