@@ -2823,7 +2823,8 @@ function renderTodoItemsEditor(item, opts){
 }
 
 function buildProgressRow(item, t, opts){
-  const when = t.done
+  const isNote = t.kind === "note";
+  const when = isNote ? (isValidDate(t.date) ? `Note ${fmtDateShort(t.date)}` : (isValidDate(t.createdAt) ? `Note ${fmtDateShort(t.createdAt)}` : "Note")) : t.done
     ? (isValidDate(t.doneAt) ? `Done ${fmtDateShort(t.doneAt)}` : "Done")
     : (isValidDate(t.createdAt) ? `Added ${fmtDateShort(t.createdAt)}` : "Open");
   const row = el(`
@@ -2833,11 +2834,11 @@ function buildProgressRow(item, t, opts){
         <div data-holder="ptag"></div>
         <div class="progress-text ${t.done ? "is-done" : ""}">${t.text}</div>
         ${stripTags(t.notes) ? `<div class="progress-notes">${t.notes}</div>` : ""}
-        ${isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
+        ${!isNote && isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
         ${t.done ? `<div class="progress-completed"><span class="progress-completed-label">Completed</span><input type="date" class="step-note-date-input" value="${isValidDate(t.doneAt) ? t.doneAt : ""}" data-role="doneat" ${t.locked ? "disabled" : ""} /></div>` : ""}
       </div>
       ${t.urgent && !t.done ? `<span class="pill pill-urgent">URGENT</span>` : ""}
-      <span class="pill ${t.done ? "pill-onplan" : "pill-pending"}">${t.done ? "done" : "open"}</span>
+      <span class="pill ${isNote ? "pill-pending" : (t.done ? "pill-onplan" : "pill-pending")}">${isNote ? "note" : (t.done ? "done" : "open")}</span>
       ${t.done && !t.locked ? `<button class="btn btn-sm btn-ghost" data-role="reopen">Reopen</button>` : ""}
       ${t.done ? lockButtonHTML(t) : ""}
       <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>Delete</button>
@@ -2859,13 +2860,13 @@ function buildProgressRow(item, t, opts){
 /** Estate-page "Progress": the full history of this estate's to-dos, newest first. */
 function renderTodoProgressPanel(item){
   migrateTodos(item);
-  const all = item.todos.filter(t => !richIsEmpty(t.text) && t.kind !== "note");
-  const stamp = (t) => (t.done ? t.doneAt : t.createdAt) || "";
+  const all = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || t.done));
+  const stamp = (t) => (t.kind === "note" ? (isValidDate(t.date) ? t.date : t.createdAt) : (t.done ? t.doneAt : t.createdAt)) || "";
   all.sort((a, b) => stamp(a) < stamp(b) ? 1 : stamp(a) > stamp(b) ? -1 : 0);
   const panel = el(`<div class="panel"><div class="panel-head"><div><h2>Progress</h2></div></div><div class="panel-pad"><div id="progress-list"></div></div></div>`);
   const list = panel.querySelector("#progress-list");
   if(!all.length){
-    list.appendChild(el(`<div class="section-note">Every to-do for this estate, finished or open, is recorded here.</div>`));
+    list.appendChild(el(`<div class="section-note">Finished to-dos and notes for this estate are recorded here.</div>`));
     return panel;
   }
   for(const t of all) list.appendChild(buildProgressRow(item, t, { showTitle: true }));
@@ -3729,9 +3730,9 @@ function renderTitleCard(item, title){
   ].map(([k, v]) => [k, stripTags(v)]).filter(([, v]) => v);
   // To-dos for this title: ones tagged to it, plus estate-level ones with no title.
   const todos = item.todos
-    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && todoOnTitle(t, title, item))
+    .filter(t => !richIsEmpty(t.text) && (t.kind === "note" || t.done) && todoOnTitle(t, title, item))
     .sort((a, b) => {
-      const sa = (a.done ? a.doneAt : a.createdAt) || "", sb = (b.done ? b.doneAt : b.createdAt) || "";
+      const sa = (a.kind === "note" ? (isValidDate(a.date) ? a.date : a.createdAt) : (a.done ? a.doneAt : a.createdAt)) || "", sb = (b.kind === "note" ? (isValidDate(b.date) ? b.date : b.createdAt) : (b.done ? b.doneAt : b.createdAt)) || "";
       return sa < sb ? 1 : sa > sb ? -1 : 0;
     });
   const card = el(`
@@ -3830,14 +3831,14 @@ function renderTitlePage(itemId, title){
 
   // Progress: every to-do for this title, newest first
   const hist = item.todos
-    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && todoOnTitle(t, title, item))
+    .filter(t => !richIsEmpty(t.text) && (t.kind === "note" || t.done) && todoOnTitle(t, title, item))
     .sort((a, b) => {
-      const sa = (a.done ? a.doneAt : a.createdAt) || "", sb = (b.done ? b.doneAt : b.createdAt) || "";
+      const sa = (a.kind === "note" ? (isValidDate(a.date) ? a.date : a.createdAt) : (a.done ? a.doneAt : a.createdAt)) || "", sb = (b.kind === "note" ? (isValidDate(b.date) ? b.date : b.createdAt) : (b.done ? b.doneAt : b.createdAt)) || "";
       return sa < sb ? 1 : sa > sb ? -1 : 0;
     });
   const prog = el(`<div class="panel"><div class="panel-head"><div><h2>Progress</h2></div></div><div class="panel-pad"></div></div>`);
   const pad = prog.querySelector(".panel-pad");
-  if(!hist.length) pad.appendChild(el(`<div class="section-note">Every to-do for this title, finished or open, is recorded here.</div>`));
+  if(!hist.length) pad.appendChild(el(`<div class="section-note">Finished to-dos and notes for this title are recorded here.</div>`));
   for(const t of hist) pad.appendChild(buildProgressRow(item, t));
   wrap.appendChild(prog);
 
