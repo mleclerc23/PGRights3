@@ -243,7 +243,8 @@
   [data-role="list"] > .todo-entry:first-child{ padding-top:0; margin-top:-8px; }
   .progress-row{ display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-top:1px solid var(--border-soft); }
   .progress-row:first-child{ border-top:none; padding-top:0; }
-  .progress-when{ flex:0 0 118px; font-family: var(--font-mono); font-size:11px; color: var(--text-faint); padding-top:2px; }
+  .progress-when .date-field{ margin-top:2px; min-width:128px; } .progress-when .date-field-display{ white-space:nowrap; }
+  .progress-when{ flex:0 0 190px; font-family: var(--font-mono); font-size:11px; color: var(--text-faint); padding-top:2px; }
   .progress-body{ flex:1; min-width:0; }
   .progress-text{ font-weight:600; font-size:13px; }
   .progress-text.is-done{ color:#000; }   /* notes and finished to-dos read identically */
@@ -2906,6 +2907,23 @@ function buildProgressRow(item, t, opts){
       <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>Delete</button>
     </div>
   `);
+  // Finished to-dos and notes stay editable here without reopening: the wording, and the date they were completed / written.
+  {
+    const txt = row.querySelector(".progress-text");
+    const line = createRichTextLine(t.text || "", "Write it out…", "progress-text" + (t.done ? " is-done" : ""));
+    if(t.locked) line.contentEditable = "false";
+    txt.replaceWith(line);
+    bindCommitRich(line, v => updateTodo(item, t.id, "text", v));
+    if((t.done || isNote) && !t.locked){
+      const whenEl = row.querySelector(".progress-when");
+      const key = isNote ? "date" : "doneAt";
+      const cur = isNote ? (isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : "")) : (isValidDate(t.doneAt) ? t.doneAt : "");
+      whenEl.innerHTML = `<span>${isNote ? "Note" : "Done"}</span><input type="date" class="step-note-date-input" value="${cur}" />`;
+      const di = whenEl.querySelector("input");
+      wrapDateField(di, cur, isNote ? "Date" : "Date done");
+      di.onchange = (e) => updateTodo(item, t.id, key, e.target.value || "");
+    }
+  }
   if(opts && opts.showTitle && t.title) row.querySelector('[data-holder="ptag"]').appendChild(titleTagEl(item, t.title));
   const reopen = row.querySelector('[data-role="reopen"]');
   if(reopen) reopen.onclick = () => updateTodo(item, t.id, "done", false);
