@@ -764,6 +764,13 @@
   .todo-entry > .todo-notes-live{ margin-top:2px; }
   .todo-entry-head .todo-entry-remove{ padding-top:0; padding-bottom:0; }
   .todo-entry .todo-items{ margin-left:14px; }
+  .link-click{ cursor:pointer; }
+  .link-click:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
+</style>
+<style>
+  .about-facts{ gap:8px 26px !important; }
+  .about-facts b{ display:block; font-size:10px; color:#8a97a6; margin:0 0 2px; }
+  .about-facts span{ font-size:15px; font-weight:600; color:#141c28; }
 </style>
 
 </head>
@@ -2054,14 +2061,13 @@ function renderTitleIndex(){
     const first = g.entries[0];
     const health = itemHealth(STATE.data, first.item);
     const colorVar = health === "completed" ? "var(--slate)" : `var(--${health})`;
-    const starred = g.entries.some(e => e.item.priorityTitles.includes(e.title));
     const cats = Array.from(new Set(g.entries.map(e => (ESTATE_CATEGORIES.find(c => c[0] === e.item.estateCategory) || [])[1] || "").filter(Boolean)));
     const row = el(`
       <div class="pulse-row">
         <div class="pulse-left">
           <span class="dot" style="background:${colorVar}"></span>
           <div>
-            <div class="pulse-name" data-open>${escapeHtml(g.label)}${starred ? ` <span class="title-page-star" title="Starred">&#9733;</span>` : ""}</div>
+            <div class="pulse-name" data-open>${escapeHtml(g.label)}</div>
             <div class="pulse-sub" data-estates></div>
           </div>
         </div>
@@ -2381,7 +2387,8 @@ function todoTitlesLabel(item){
   const own = stripTags(item.todoTitleLabel || "").trim();
   if(own) return own.toUpperCase();
   if(Array.isArray(item.todos)){
-    const open = item.todos.filter(t => !t.done && t.kind !== "note" && !richIsEmpty(t.text));
+    // Everything shown in the box (open, notes, recently completed) decides the heading, so finishing a to-do never changes it.
+    const open = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
     if(open.length && open.every(t => t.title)){
       const tagged = new Set(open.map(t => t.title));
       const ordered = (item.titles && item.titles.length ? orderedTitleList(item) : []).filter(t => tagged.has(t));
@@ -2520,7 +2527,7 @@ function renderTodoItemsEditor(item, opts){
   const addKey = exact ? item.id + "|" + onlyTitle : item.id;
   const canTitle = item.id !== GENERAL_ID && !(onlyTitle && !exact);
   const wrap = el(`<div class="todo-items"></div>`);
-  const showTag = !onlyTitle && !exact && item.id !== GENERAL_ID;
+  const showTag = !onlyTitle && !exact && !(opts && opts.noTag) && item.id !== GENERAL_ID;
   const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || !t.title || t.title === onlyTitle)));
   // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, newest first.
   const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
@@ -3297,7 +3304,8 @@ function renderTodoTab(){
   const open = STATE.data.items.filter(i => !(i.stepActuals && i.stepActuals.target_rights_secured));
   for(const i of open) migrateTodos(i);
   const holdDate = (i) => (i.estateCategory === "hold" && isValidDate(i.holdFollowUpDate) && i.todoFollowUpDismissed !== i.holdFollowUpDate) ? i.holdFollowUpDate : null;
-  const hasUrgent = (i) => openTodos(i).some(t => t.urgent);
+  // A to-do that was urgent keeps its box where it was for the rest of the day it is finished, so checking it off never makes the box jump away.
+  const hasUrgent = (i) => (i.todos || []).some(t => t.urgent && t.kind !== "note" && !richIsEmpty(t.text) && (!t.done || t.doneAt === today));
   const general = getGeneralItem();
   const order = Array.isArray(STATE.data.todoOrder) ? STATE.data.todoOrder : [];
   const ordIdx = (i) => { const k = order.indexOf(i.id); return k === -1 ? 1e9 : k; };
@@ -3509,7 +3517,7 @@ function renderTodoTab(){
       syncCollapseAll();
     });
     const itemsHolder = entry.querySelector('[data-holder="items"]');
-    if(!secs) itemsHolder.appendChild(renderTodoItemsEditor(item));
+    if(!secs) itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
     else secs.forEach((sec, i) => {
       if(!i){
         const first = el(`<div class="todo-sec-first"></div>`);
@@ -3647,10 +3655,9 @@ function renderTitlePage(itemId, title){
   const back = el(`<div class="back-link">← Back to Details</div>`);
   back.onclick = () => { STATE.view = "overview"; STATE.tab = "overview"; STATE.currentTitle = null; render(); };
   wrap.appendChild(back);
-  const starred = item.priorityTitles.includes(title);
   const head = el(`
     <div class="title-page-head">
-      <h1 class="title-page-name">${escapeHtml(stripTags(title))}${starred ? ` <span class="title-page-star" title="Starred">&#9733;</span>` : ""}</h1>
+      <h1 class="title-page-name">${escapeHtml(stripTags(title))}</h1>
       <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
     </div>
   `);
@@ -3698,7 +3705,7 @@ function renderTitlePage(itemId, title){
     <div class="panel">
       <div class="panel-head"><div><h2>About this title</h2></div></div>
       <div class="panel-pad">
-        ${facts.length ? `<div class="title-card-facts" style="margin-bottom:10px;">${facts.map(([k, v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div>` : ""}
+        ${facts.length ? `<div class="title-card-facts about-facts" style="margin-bottom:14px;">${facts.map(([k, v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div>` : ""}
         <span class="field-label">Logline</span>
         <div data-holder="logline"></div>
         <span class="field-label" style="margin-top:12px;display:block;">Title notes</span>
@@ -3714,38 +3721,37 @@ function renderTitlePage(itemId, title){
     recordChange(item.id, "item", item.id, item.name, "titleDetails." + field, stripTags(title) + " " + label, old, v);
     scheduleSave();
   };
-  // Logline: editable until entered, then read-only (Edit to change), like the other details.
-  const loglineHolder = about.querySelector('[data-holder="logline"]');
-  let editingLogline = false;
-  const paintLogline = () => {
-    loglineHolder.innerHTML = "";
-    const cur = (getTd() || {}).logline || "";
-    if(stripTags(cur) && !editingLogline){
-      const row = el(`<div class="td-top" style="align-items:flex-start;gap:10px;"><div class="td-readonly-text" style="flex:1;"></div><button class="btn btn-sm btn-ghost" type="button">Edit</button></div>`);
-      row.querySelector(".td-readonly-text").innerHTML = cur;
-      row.querySelector("button").onclick = () => { editingLogline = true; paintLogline(); const ed = loglineHolder.querySelector("[contenteditable]"); if(ed) ed.focus(); };
-      loglineHolder.appendChild(row);
-      return;
-    }
-    const ed = createRichTextEditor(cur, "Add a logline…", 44);
-    loglineHolder.appendChild(ed.wrap);
-    const save = saveTd("logline", "logline");
-    bindCommitRich(ed.editable, save);
-    const finish = () => { editingLogline = false; paintLogline(); };
-    if(editingLogline){
-      const done = el(`<button class="btn btn-sm" type="button" style="margin-top:6px;">Done</button>`);
-      done.onmousedown = (e) => e.preventDefault();
-      done.onclick = () => { save(sanitizeRichHTML(ed.editable.innerHTML)); finish(); };
-      loglineHolder.appendChild(done);
-    }else{
-      // first entry: lock as soon as it has been saved with text
-      ed.editable.addEventListener("blur", () => setTimeout(() => { if(stripTags((getTd() || {}).logline || "")) finish(); }, 0));
-    }
+  // Logline and Title notes: editable until entered, then read-only (Edit to change).
+  const makeLockedField = (holder, field, label, placeholder, rows) => {
+    let editing = false;
+    const paint = () => {
+      holder.innerHTML = "";
+      const cur = (getTd() || {})[field] || "";
+      if(stripTags(cur) && !editing){
+        const row = el(`<div class="td-top" style="align-items:flex-start;gap:10px;"><div class="td-readonly-text" style="flex:1;"></div><button class="btn btn-sm btn-ghost" type="button">Edit</button></div>`);
+        row.querySelector(".td-readonly-text").innerHTML = cur;
+        row.querySelector("button").onclick = () => { editing = true; paint(); const ed = holder.querySelector("[contenteditable]"); if(ed) ed.focus(); };
+        holder.appendChild(row);
+        return;
+      }
+      const ed = createRichTextEditor(cur, placeholder, rows);
+      holder.appendChild(ed.wrap);
+      const save = saveTd(field, label);
+      bindCommitRich(ed.editable, save);
+      const finish = () => { editing = false; paint(); };
+      if(editing){
+        const done = el(`<button class="btn btn-sm" type="button" style="margin-top:6px;">Done</button>`);
+        done.onmousedown = (e) => e.preventDefault();
+        done.onclick = () => { save(sanitizeRichHTML(ed.editable.innerHTML)); finish(); };
+        holder.appendChild(done);
+      }else{
+        ed.editable.addEventListener("blur", () => setTimeout(() => { if(stripTags((getTd() || {})[field] || "")) finish(); }, 0));
+      }
+    };
+    paint();
   };
-  paintLogline();
-  const tnotes = createRichTextEditor(td.notes || "", "Notes on this title…", 60);
-  about.querySelector('[data-holder="tnotes"]').appendChild(tnotes.wrap);
-  bindCommitRich(tnotes.editable, saveTd("notes", "notes"));
+  makeLockedField(about.querySelector('[data-holder="logline"]'), "logline", "logline", "Add a logline…", 44);
+  makeLockedField(about.querySelector('[data-holder="tnotes"]'), "notes", "notes", "Notes on this title…", 60);
   wrap.appendChild(about);
 
   wrap.appendChild(renderDocumentsPanel(item, { title }));
@@ -3844,7 +3850,7 @@ function renderSummaryBox(item){
     <div class="summary-box">
       <div class="summary-box-header">
         <h3>${escapeHtml(item.name)}</h3>
-        ${(item.titles && item.titles.length) ? `<div class="summary-titles">${orderedTitleList(item).map(t => escapeHtml(t)).join(", ")}</div>` : ""}
+        ${(item.titles && item.titles.length) ? `<div class="summary-titles" data-role="subtitles"></div>` : ""}
       </div>
       <div class="summary-section">
         <div class="summary-section-label">Progress</div>
@@ -3865,6 +3871,7 @@ function renderSummaryBox(item){
     </div>
   `);
   box.querySelector(".summary-box-header").onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+  { const subEl = box.querySelector('[data-role="subtitles"]'); if(subEl) appendTitleLinks(subEl, item, orderedTitleList(item)); }
   return box;
 }
 
@@ -3983,13 +3990,15 @@ function renderEstateCategoryPanel(key, label, items){
           <span class="dot" style="background:${colorVar}"></span>
           <div>
             <div class="pulse-name">${escapeHtml(item.name)}</div>
-            ${titleList ? `<div class="pulse-sub">${escapeHtml(titleList)}</div>` : ""}
+            ${titleList ? `<div class="pulse-sub" data-role="subtitles"></div>` : ""}
           </div>
         </div>
         ${badgeHtml(health, labelMap[health] || health)}
       </div>
     `);
     row.querySelector("[data-open]").onclick = () => { STATE.view="detail"; STATE.currentItemId=item.id; render(); };
+    const subEl = row.querySelector('[data-role="subtitles"]');
+    if(subEl) appendTitleLinks(subEl, item, orderedTitleList(item));
     list.appendChild(row);
   }
   return panel;
@@ -4604,6 +4613,21 @@ function orderedTitleList(item){
   const rest = item.titles.filter(t => !item.priorityTitles.includes(t));
   return [...priority, ...rest];
 }
+/** Titles as clickable links (comma separated) into `container`; each opens that title's page. */
+function appendTitleLinks(container, item, titles){
+  container.textContent = "";
+  titles.forEach((t, i) => {
+    if(i) container.appendChild(document.createTextNode(", "));
+    const sp = document.createElement("span");
+    sp.textContent = stripTags(t);
+    if((item.titles || []).includes(t)){
+      sp.className = "link-click"; sp.title = "Open title page";
+      sp.addEventListener("click", (e) => { e.stopPropagation(); openTitlePage(item, t); });
+    }
+    container.appendChild(sp);
+  });
+}
+function openEstatePage(item){ STATE.tab = "overview"; STATE.view = "detail"; STATE.currentItemId = item.id; STATE.currentTitle = null; render(); window.scrollTo(0, 0); }
 function renderTitlesSection(item){
   if(!item.titles) item.titles = [];
   migrateTitlePriority(item);
@@ -4619,10 +4643,11 @@ function renderTitlesSection(item){
     const tag = el(`
       <span class="title-tag ${priority ? "title-tag-priority" : ""}">
         <button class="title-tag-star ${priority ? "active" : ""}" data-role="star" title="${priority ? "Unmark priority" : "Mark as priority"}">★</button>
-        <span>${escapeHtml(title)}</span>
+        <span class="link-click" data-role="open-title" title="Open title page">${escapeHtml(title)}</span>
         <button data-role="remove" title="Remove">×</button>
       </span>
     `);
+    tag.querySelector('[data-role="open-title"]').onclick = () => openTitlePage(item, title);
     tag.querySelector('[data-role="star"]').onclick = () => toggleTitlePriority(item, title);
     tag.querySelector('[data-role="remove"]').onclick = () => removeTitle(item, idx);
     return tag;
@@ -5538,7 +5563,7 @@ function renderPostedTitleBlock(item, td, idx){
     <div class="td-block td-posted">
       <div class="td-top">
         ${td.title ? `<button class="title-tag-star ${isTitlePriority(item, td.title) ? "active" : ""}" data-role="star" title="${isTitlePriority(item, td.title) ? "Unmark priority" : "Mark as priority"}">★</button>` : ""}
-        <div class="td-title-display">${td.title || "Untitled"}</div>
+        <div class="td-title-display ${td.title && (item.titles || []).includes(td.title) ? "link-click" : ""}" data-role="open-title">${td.title || "Untitled"}</div>
         <button class="btn btn-sm" data-role="edit">Edit</button>
       </div>
       ${td.logline ? `<div class="td-readonly-text">${td.logline}</div>` : ""}
@@ -5549,6 +5574,7 @@ function renderPostedTitleBlock(item, td, idx){
     </div>
   `);
   block.querySelector('[data-role="edit"]').onclick = () => setTitleDetailPosted(item, idx, false);
+  block.querySelector('[data-role="open-title"]').onclick = () => { if(td.title && (item.titles || []).includes(td.title)) openTitlePage(item, td.title); };
   const starBtn = block.querySelector('[data-role="star"]');
   if(starBtn) starBtn.onclick = () => toggleTitlePriority(item, td.title);
   return block;
@@ -5810,7 +5836,7 @@ function renderChangeRow(c, showItemName){
     <div class="change-row">
       <div class="change-time">${when}</div>
       <div class="change-body">
-        ${showItemName && item ? `<b>${escapeHtml(item.name)}</b> — ` : ""}${escapeHtml(c.fieldLabel || c.field)}
+        ${showItemName && item ? `<b class="link-click" data-role="open-estate" title="Open estate">${escapeHtml(item.name)}</b> — ` : ""}${escapeHtml(c.fieldLabel || c.field)}
         ${delta ? `<div class="change-delta">${delta}</div>` : ""}
         ${c.note ? `<div class="kv-sub" style="margin-top:2px;">${escapeHtml(c.note)}</div>` : ""}
       </div>
@@ -5820,6 +5846,7 @@ function renderChangeRow(c, showItemName){
   if(revertible){
     row.querySelector('[data-role="revert"]').onclick = () => revertChange(c);
   }
+  { const oe = row.querySelector('[data-role="open-estate"]'); if(oe && item) oe.onclick = () => openEstatePage(item); }
   return row;
 }
 
