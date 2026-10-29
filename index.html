@@ -771,6 +771,10 @@
   .title-notes-panel .todo-line, .title-notes-panel .td-readonly-text, .title-notes-panel .note-bullet{ font-size:14px; font-weight:400; color:#000; line-height:1.5; }
   .title-notes-panel .todo-line, .title-notes-panel .note-bullet{ position:relative; padding-left:16px; margin:0 0 4px; }
   .title-notes-panel .todo-line::before, .title-notes-panel .note-bullet::before{ content:""; position:absolute; left:2px; top:0.62em; width:5px; height:5px; background:#000; }
+  .title-notes-panel .note-side{ display:flex; align-items:flex-start; gap:18px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line, #d5dde6); }
+  .title-notes-panel .todo-lines:empty + * .note-side{ margin-top:0; padding-top:0; border-top:0; }
+  .title-notes-panel .note-side .td-readonly-text{ flex:1; min-width:0; margin-bottom:0; }
+  .title-notes-panel .note-side .notes-date-row{ flex:0 0 auto; margin:2px 0 0; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
   .about-facts{ gap:8px 26px !important; }
   .about-facts b{ display:inline !important; font-size:11px !important; font-weight:700 !important; color: var(--red) !important; margin:0 6px 0 0 !important; }
   .about-facts span{ font-size:13px; font-weight:400; color:#000; line-height:1.55; }
@@ -5813,7 +5817,10 @@ function buildEstateNotesBlock(item, opts){
       row.querySelector(".notes-date").textContent = d ? fmtDateShort(d) : "";
       if(opts.bullets){
         const box = row.querySelector(".td-readonly-text");
-        for(const ln of splitRichLines(item.notes)){ const b = document.createElement("div"); b.className = "note-bullet"; b.innerHTML = ln; box.appendChild(b); }
+        for(const ln of splitRichLines(item.notes)){ const b = document.createElement("div"); b.className = "note-bullet"; b.innerHTML = ln.replace(/^(\s|&nbsp;)+/i, ""); box.appendChild(b); }
+        // date and Edit sit beside the note, not above it
+        row.classList.add("note-side");
+        row.appendChild(row.querySelector(".notes-date-row"));
       }else row.querySelector(".td-readonly-text").innerHTML = item.notes;
       row.querySelector("button").onclick = () => { editing = true; paint(); const ed = holder.querySelector("[contenteditable]"); if(ed) ed.focus(); };
       holder.appendChild(row);
