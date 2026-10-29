@@ -2125,6 +2125,12 @@ function detailsSort(){
   STATE.detailsSort = v === "title" ? "title" : "estate";
   return STATE.detailsSort;
 }
+function titleFilterMode(){
+  if(STATE.titleFilter) return STATE.titleFilter;
+  let v = "all"; try{ v = localStorage.getItem("pgr:titleFilter") || "all"; }catch(e){}
+  STATE.titleFilter = v === "priority" ? "priority" : "all";
+  return STATE.titleFilter;
+}
 function renderTitleIndex(){
   const items = filteredItems();
   for(const item of items){ migrateEstateCategory(item); migrateTitlePriority(item); }
@@ -2138,12 +2144,17 @@ function renderTitleIndex(){
     if(!g.entries.some(e => e.item.id === item.id)) g.entries.push({ item, title: t });
   }
   const sq = STATE.search.trim().toLowerCase();
-  const rows = Array.from(groups.values()).filter(g => !sq || g.label.toLowerCase().includes(sq));
+  const filterMode = titleFilterMode();
+  const rows = Array.from(groups.values()).filter(g => (!sq || g.label.toLowerCase().includes(sq)) && (filterMode === "all" || g.entries.some(e => isTitlePriority(e.item, e.title))));
   for(const g of rows) g.entries.sort((a, b) => byName(a.item.name, b.item.name));
   rows.sort((a, b) => byName(a.label, b.label));
   const estateCount = new Set(rows.flatMap(r => r.entries.map(e => e.item.id))).size;
   const wrap = el(`<div class="estate-categories"></div>`);
-  const panel = el(`<div class="panel"><div class="panel-head"><div><h2>All titles</h2><div class="section-note" style="margin-top:2px;">${rows.length} title${rows.length === 1 ? "" : "s"} across ${estateCount} estate${estateCount === 1 ? "" : "s"}, A-Z</div></div></div><div class="panel-pad" data-role="list"></div></div>`);
+  const panel = el(`<div class="panel"><div class="panel-head"><div><h2>${filterMode === "all" ? "All titles" : "Priority titles"}</h2><div class="section-note" style="margin-top:2px;">${rows.length} title${rows.length === 1 ? "" : "s"} across ${estateCount} estate${estateCount === 1 ? "" : "s"}, A-Z</div></div><div class="todo-view-toggle" id="title-filter"><button class="btn btn-sm ${filterMode === "priority" ? "" : "btn-ghost"}" data-filter="priority" type="button">Priority titles</button><button class="btn btn-sm ${filterMode === "all" ? "" : "btn-ghost"}" data-filter="all" type="button">All titles</button></div></div><div class="panel-pad" data-role="list"></div></div>`);
+  panel.querySelectorAll("#title-filter [data-filter]").forEach(b => b.onclick = () => {
+    try{ localStorage.setItem("pgr:titleFilter", b.dataset.filter); }catch(e){}
+    STATE.titleFilter = b.dataset.filter; renderOverviewInPlace();
+  });
   const list = panel.querySelector('[data-role="list"]');
   if(!rows.length) list.appendChild(el(`<div class="section-note">No titles yet. Add titles on an estate's page.</div>`));
   for(const g of rows){
@@ -2160,8 +2171,15 @@ function renderTitleIndex(){
             <div class="pulse-sub" data-estates></div>
           </div>
         </div>
-        <span>${cats.map(c => `<span class="pill pill-pending" style="margin-left:4px;">${escapeHtml(c)}</span>`).join("")}</span>
+        <span>${cats.map(c => `<span class="pill pill-pending" style="margin-left:4px;">${escapeHtml(c)}</span>`).join("")}<button class="btn btn-sm btn-ghost" data-role="prio" type="button" style="margin-left:8px;"></button></span>
       </div>`);
+    { // demote / promote: applies to every estate that carries this title
+      const isPrio = g.entries.some(e => isTitlePriority(e.item, e.title));
+      const pb = row.querySelector('[data-role="prio"]');
+      pb.textContent = isPrio ? "Demote" : "Make priority";
+      pb.title = isPrio ? "Take this title off the priority list" : "Add this title to the priority list";
+      pb.onclick = (ev) => { ev.stopPropagation(); for(const e of g.entries) setTitlePriority(e.item, e.title, !isPrio); };
+    }
     row.querySelector("[data-open]").onclick = () => openTitlePage(first.item, first.title);
     const sp = row.querySelector("[data-estates]");
     g.entries.forEach((e, i) => {
@@ -4804,23 +4822,31 @@ function migrateTitlePriority(item){
   if(!Array.isArray(item.priorityTitles)) item.priorityTitles = [];
   if(typeof item.additionalTitlesHidden !== "boolean") item.additionalTitlesHidden = false;
 }
+/** A title is a priority when it is starred on its estate, or is the estate's only title - unless it has been demoted. */
 function isTitlePriority(item, title){
   migrateTitlePriority(item);
-  return item.priorityTitles.includes(title);
+  if((item.demotedTitles || []).includes(title)) return false;
+  if(item.priorityTitles.includes(title)) return true;
+  return (item.titles || []).filter(t => stripTags(t)).length === 1;
 }
-function toggleTitlePriority(item, title){
+function setTitlePriority(item, title, on){
   migrateTitlePriority(item);
+  if(isTitlePriority(item, title) === on) return;
+  if(!Array.isArray(item.demotedTitles)) item.demotedTitles = [];
   const idx = item.priorityTitles.indexOf(title);
-  if(idx === -1){
-    item.priorityTitles.push(title);
+  if(on){
+    if(idx === -1) item.priorityTitles.push(title);
+    item.demotedTitles = item.demotedTitles.filter(t => t !== title);
     recordChange(item.id, "item", item.id, item.name, "titlePriority", "Title marked priority", "", title);
   }else{
-    item.priorityTitles.splice(idx, 1);
-    recordChange(item.id, "item", item.id, item.name, "titlePriority", "Title unmarked priority", title, "");
+    if(idx !== -1) item.priorityTitles.splice(idx, 1);
+    if(!item.demotedTitles.includes(title)) item.demotedTitles.push(title);
+    recordChange(item.id, "item", item.id, item.name, "titlePriority", "Title demoted from priority", title, "");
   }
   scheduleSave();
   render();
 }
+function toggleTitlePriority(item, title){ setTitlePriority(item, title, !isTitlePriority(item, title)); }
 function toggleAdditionalTitlesHidden(item){
   migrateTitlePriority(item);
   item.additionalTitlesHidden = !item.additionalTitlesHidden;
