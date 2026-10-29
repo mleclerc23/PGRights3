@@ -4605,7 +4605,33 @@ async function openDocument(doc){
     ov.querySelector('[data-role="vclose"]').onclick = close;
     ov.querySelector('[data-role="vdl"]').onclick = () => downloadBlob(blob, doc.name);
     if(info.kind === "pdf"){
-      const fr = document.createElement("iframe"); fr.src = url; fr.style.cssText = "border:0;flex:1;width:100%;height:100%;"; body.appendChild(fr);
+      // Drawn by pdf.js rather than the browser's own PDF plug-in, which many browsers disable or turn into a download prompt.
+      body.style.cssText += "display:block;padding:14px 0;";
+      body.innerHTML = '<div style="text-align:center;color:#667;padding:40px;">Loading PDF…</div>';
+      try{
+        const base = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+        await loadScriptOnce(base + "pdf.min.js");
+        const lib = window.pdfjsLib;
+        const wres = await fetch(base + "pdf.worker.min.js"); const wblob = new Blob([await wres.text()], { type: "text/javascript" });
+        lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(wblob);
+        const pdf = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+        body.innerHTML = "";
+        document.body.appendChild(ov);
+        const width = Math.min(body.clientWidth - 40, 980);
+        for(let n = 1; n <= pdf.numPages; n++){
+          if(!ov.isConnected) break;
+          const page = await pdf.getPage(n);
+          const vp1 = page.getViewport({ scale: 1 }), scale = width / vp1.width, dpr = window.devicePixelRatio || 1;
+          const vp = page.getViewport({ scale: scale * dpr });
+          const cv = document.createElement("canvas"); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+          cv.style.cssText = `display:block;margin:0 auto 14px;width:${Math.floor(vp.width / dpr)}px;height:${Math.floor(vp.height / dpr)}px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.25);`;
+          body.appendChild(cv);
+          await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+        }
+        return;
+      }catch(err){
+        close(); downloadBlob(blob, doc.name); showToast("Couldn't preview that PDF here, so it was downloaded."); return;
+      }
     }else if(info.kind === "image"){
       const im = document.createElement("img"); im.src = url; im.alt = doc.name; im.style.cssText = "max-width:100%;max-height:100%;margin:auto;object-fit:contain;"; body.appendChild(im);
     }else if(info.kind === "text"){
