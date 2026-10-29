@@ -768,6 +768,9 @@
   .link-click:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
 </style>
 <style>
+  .title-notes-panel .todo-line, .title-notes-panel .td-readonly-text, .title-notes-panel .note-bullet{ font-size:14px; font-weight:400; color:#000; line-height:1.5; }
+  .title-notes-panel .todo-line, .title-notes-panel .note-bullet{ position:relative; padding-left:16px; margin:0 0 4px; }
+  .title-notes-panel .todo-line::before, .title-notes-panel .note-bullet::before{ content:""; position:absolute; left:2px; top:0.62em; width:5px; height:5px; background:#000; }
   .about-facts{ gap:8px 26px !important; }
   .about-facts b{ display:inline !important; font-size:11px !important; font-weight:700 !important; color: var(--red) !important; margin:0 6px 0 0 !important; }
   .about-facts span{ font-size:13px; font-weight:400; color:#000; line-height:1.55; }
@@ -3673,14 +3676,14 @@ function renderTitlePage(itemId, title){
 
   // The estate's own notes
   const est = el(`
-    <div class="panel">
-      <div class="panel-head"><div><h2>Estate notes</h2><div class="section-note" style="margin-top:2px;">${escapeHtml(item.name)}. Same notes as on the estate page.</div></div></div>
+    <div class="panel title-notes-panel">
+      <div class="panel-head"><div><h2>Notes</h2></div></div>
       <div class="panel-pad"><div data-holder="contacts"></div><div data-holder="notes"></div></div>
     </div>
   `);
   const cl = buildContactLinesBox(item);
   if(cl.children.length) est.querySelector('[data-holder="contacts"]').appendChild(cl);
-  est.querySelector('[data-holder="notes"]').appendChild(buildEstateNotesBlock(item));
+  est.querySelector('[data-holder="notes"]').appendChild(buildEstateNotesBlock(item, { bullets: true }));
   wrap.appendChild(est);
 
   // Progress: every to-do for this title, newest first
@@ -5790,7 +5793,8 @@ function removeTitleAttachment(item, idx, attIdx){
 
 /* ---- Estate notes: read-only once entered, unlock to edit, dated ---- */
 function notesEffectiveDate(item){ return isValidDate(item.notesDate) ? item.notesDate : (isValidDate(item.notesCreatedAt) ? item.notesCreatedAt : ""); }
-function buildEstateNotesBlock(item){
+function buildEstateNotesBlock(item, opts){
+  opts = opts || {};
   const holder = el(`<div></div>`);
   let editing = false;
   const save = (v) => {
@@ -5807,7 +5811,10 @@ function buildEstateNotesBlock(item){
       const d = notesEffectiveDate(item);
       const row = el(`<div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button">Edit</button></div><div class="td-readonly-text"></div></div>`);
       row.querySelector(".notes-date").textContent = d ? fmtDateShort(d) : "";
-      row.querySelector(".td-readonly-text").innerHTML = item.notes;
+      if(opts.bullets){
+        const box = row.querySelector(".td-readonly-text");
+        for(const ln of splitRichLines(item.notes)){ const b = document.createElement("div"); b.className = "note-bullet"; b.innerHTML = ln; box.appendChild(b); }
+      }else row.querySelector(".td-readonly-text").innerHTML = item.notes;
       row.querySelector("button").onclick = () => { editing = true; paint(); const ed = holder.querySelector("[contenteditable]"); if(ed) ed.focus(); };
       holder.appendChild(row);
       return;
