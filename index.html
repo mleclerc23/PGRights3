@@ -777,11 +777,6 @@
   .title-notes-panel .note-side .notes-date-row{ flex:0 0 auto; margin:2px 0 0; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
   .todo-entry-head:has(.todo-entry-titles.editing){ cursor:default; }
   .todo-entry-head:has(.todo-entry-titles.editing) .todo-entry-name, .todo-entry-head:has(.todo-entry-titles.editing) .title-link{ pointer-events:none; text-decoration:none !important; }
-  .about-facts{ gap:8px 26px !important; }
-  .about-facts b{ display:inline !important; font-size:11px !important; font-weight:700 !important; color: var(--red) !important; margin:0 6px 0 0 !important; }
-  .about-facts span{ font-size:13px; font-weight:400; color:#000; line-height:1.55; }
-  .about-panel .td-readonly-text{ color:#000; }
-  .about-panel .field-label{ font-weight:700 !important; color: var(--red) !important; font-size:11px !important; }
 </style>
 
 </head>
@@ -1463,6 +1458,16 @@ function normalizeOrder(boot){
     const fix = (x) => { if(!x.title) return; const k = tkey(x.title); if(!k) return; if(!canon.has(k)) canon.set(k, x.title); if(x.title !== canon.get(k)) x.title = canon.get(k); };
     for(const t of (it.todos || [])){ fix(t); if(typeof t.notes === "string" && t.notes && richIsEmpty(t.notes)) t.notes = ""; }
     for(const t of (it.documents || [])) fix(t);
+    { // a title's details filed under a slightly different spelling ("Softly Softly" vs "Softly, Softly") belong to the estate's own title
+      const lk = (x) => stripTags(x).replace(/&nbsp;|\u00a0/g, " ").toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/^the/, "");
+      const have = new Set((it.titleDetails || []).map(td => td.title));
+      for(const td of (it.titleDetails || [])){
+        if(!td.title || (it.titles || []).includes(td.title)) continue;
+        const k = lk(td.title); if(!k) continue;
+        const hit = (it.titles || []).find(t => lk(t) === k && !have.has(t));
+        if(hit){ have.delete(td.title); td.title = hit; have.add(hit); }
+      }
+    }
     if(Array.isArray(it.actionTitles)){ const seen = new Set(); it.actionTitles = it.actionTitles.map(t => canon.get(tkey(t)) || t).filter(t => { const k = tkey(t); if(seen.has(k)) return false; seen.add(k); return true; }); }
   }
   d.items.sort((a, b) => cmp(a.name, b.name));
@@ -2242,6 +2247,7 @@ function addTodo(item, text, date, title, kind){
   const value = (text || "").trim();
   if(!value) return;
   migrateTodos(item);
+  item.actionHidden = false;
   const rec = { id: uid("tk"), text: escapeHtml(value), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
   if(kind === "note") rec.kind = "note";
   item.todos.push(rec);
@@ -3143,7 +3149,7 @@ function bindFormattedEditing(docEl){
 /** Keep an estate (and optionally one of its titles) on the Action List even with nothing active. */
 function pinToActionList(item, title){
   if(!item || item.id === GENERAL_ID) return;
-  item.actionPinned = true;
+  item.actionPinned = true; item.actionHidden = false;
   if(title){
     if(!item.actionTitles) item.actionTitles = [];
     if(!item.actionTitles.includes(title)) item.actionTitles.push(title);
@@ -3153,12 +3159,11 @@ function pinToActionList(item, title){
   render();
 }
 function removeTodoEntry(item){
-  migrateTodos(item);
-  const open = item.todos.filter(t => !t.done);
-  for(const t of open) recordChange(item.id, "item", item.id, item.name, "todoRemove", "To-do removed", stripTags(t.text), "");
-  item.todos = item.todos.filter(t => t.done);
+  // Takes the estate off the Action List only. Its to-dos, notes and everything on the Details pages stay as they are.
+  item.actionHidden = true;
   item.actionTitles = [];
   item.actionPinned = false;
+  recordChange(item.id, "item", item.id, item.name, "actionHidden", "Removed from Action List", "", item.name);
   if(item.estateCategory === "hold" && isValidDate(item.holdFollowUpDate)) item.todoFollowUpDismissed = item.holdFollowUpDate;
   scheduleSave();
   render();
@@ -3322,7 +3327,7 @@ function renderTodoTab(){
   const ordIdx = (i) => { const k = order.indexOf(i.id); return k === -1 ? 1e9 : k; };
   const entryLabel = (i) => { const sc = todoSections(i); return (sc ? sc[0].label : todoTitlesLabel(i)) || i.name; };
   const rows = open.concat([general])
-    .filter(i => i.id === GENERAL_ID || openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i)))
+    .filter(i => i.id === GENERAL_ID || (!i.actionHidden && openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i))))
     .sort((a, b) => {
       // Urgent first, then General, then everything else alphabetically by title / estate.
       if(hasUrgent(a) !== hasUrgent(b)) return hasUrgent(a) ? -1 : 1;
@@ -3723,9 +3728,9 @@ function renderTitlePage(itemId, title){
     <div class="panel about-panel">
       <div class="panel-head"><div><h2>About this title</h2></div></div>
       <div class="panel-pad">
-        <div data-holder="facts" style="margin-bottom:14px;"></div>
         <span class="field-label">Logline</span>
         <div data-holder="logline"></div>
+        <div data-holder="facts" style="margin-top:6px;"></div>
         <span class="field-label" style="margin-top:12px;display:block;">Title notes</span>
         <div data-holder="tnotes"></div>
       </div>
@@ -3741,23 +3746,30 @@ function renderTitlePage(itemId, title){
   };
   // Facts (genre, original/adapted, episodes, based on, run, broadcaster): read-only with Edit
   const factDefs = [
-    ["genre", "Genre", "text", "e.g. Mystery, Drama"], ["originalOrAdapted", "Original / adapted", "select"],
-    ["episodeCount", "Episodes", "number", "e.g. 8"], ["basedOn", "Based on", "text", "Source material"],
-    ["originalRun", "Original run", "text", "e.g. 1998-2003"], ["broadcaster", "Broadcaster", "text", "e.g. BBC One"],
+    ["genre", "Genre", "text", "e.g. Mystery, Drama"], ["originalRun", "Original run", "text", "e.g. 1998-2003"],
+    ["episodeCount", "# of episodes", "number", "e.g. 8"], ["broadcaster", "Broadcaster", "text", "e.g. BBC One"],
+    ["originalOrAdapted", "Original or adapted", "select"], ["basedOn", "Based on", "text", "Source material"],
   ];
   const plain = (h) => { const d = document.createElement("div"); d.innerHTML = h || ""; return (d.textContent || "").trim(); };
+  const adaptList = () => ((getTd() || {}).adaptations || []).filter(a => a && !richIsEmpty(a.text));
   const factsHolder = about.querySelector('[data-holder="facts"]');
   let editingFacts = false;
   const paintFacts = () => {
     factsHolder.innerHTML = "";
     const cur = getTd() || {};
     const filled = factDefs.filter(([k]) => plain(cur[k]));
-    if(filled.length && !editingFacts){
-      const row = el(`<div class="td-top" style="align-items:flex-start;gap:10px;"><div class="title-card-facts about-facts" style="flex:1;margin-top:0;"></div><button class="btn btn-sm btn-ghost" type="button">Edit</button></div>`);
-      const box = row.querySelector(".about-facts");
+    if((filled.length || adaptList().length) && !editingFacts){
+      const row = el(`<div class="td-top" style="align-items:flex-start;gap:10px;"><div style="flex:1;"><div class="td-readonly-meta"></div><div class="td-ad-holder"></div></div><button class="btn btn-sm btn-ghost" type="button">Edit</button></div>`);
+      const box = row.querySelector(".td-readonly-meta");
       for(const [k, label] of filled){
-        const sp = document.createElement("span"); const b = document.createElement("b"); b.textContent = label;
-        sp.appendChild(b); sp.appendChild(document.createTextNode(" " + plain(cur[k]))); box.appendChild(sp);
+        const sp = document.createElement("span"); const lb = document.createElement("span"); lb.className = "td-meta-label"; lb.textContent = label.toUpperCase() + ":";
+        sp.appendChild(lb); sp.appendChild(document.createTextNode(" " + plain(cur[k]))); box.appendChild(sp);
+      }
+      if(adaptList().length){
+        const blk = el(`<div class="td-readonly-block"><span class="field-label">Adaptations</span><ul class="td-adaptations-list"></ul></div>`);
+        const ul = blk.querySelector("ul");
+        for(const a of adaptList()){ const li = document.createElement("li"); li.innerHTML = a.text; ul.appendChild(li); }
+        row.querySelector(".td-ad-holder").appendChild(blk);
       }
       row.querySelector("button").onclick = () => { editingFacts = true; paintFacts(); };
       factsHolder.appendChild(row);
@@ -3786,8 +3798,24 @@ function renderTitlePage(itemId, title){
       }
     };
     factsHolder.appendChild(grid);
+    const adWrap = el(`<div style="margin-top:10px;"><span class="field-label">Adaptations (one per line)</span></div>`);
+    const adEd = createRichTextEditor(adaptList().map(a => a.text).join("<br>"), "e.g. 1965-1969 - spinoff Softly, Softly", 44);
+    adWrap.appendChild(adEd.wrap); factsHolder.appendChild(adWrap);
     const done = el(`<button class="btn btn-sm" type="button" style="margin-top:8px;">Done</button>`);
-    done.onclick = () => { saveAll(); editingFacts = false; paintFacts(); };
+    done.onclick = () => {
+      saveAll();
+      const lines = splitRichLines(sanitizeRichHTML(adEd.editable.innerHTML)).filter(l => !richIsEmpty(l));
+      const before = adaptList();
+      if(lines.join("<br>") !== before.map(a => a.text).join("<br>")){
+        ensureTitleDetailForTag(item, title);
+        const d = getTd();
+        const oldTxt = before.map(a => stripTags(a.text)).join("; ");
+        d.adaptations = lines.map((l, i) => ({ id: (before[i] && before[i].id) || uid("ad"), text: l }));
+        recordChange(item.id, "item", item.id, item.name, "titleDetails.adaptations", stripTags(title) + " adaptations", oldTxt, lines.map(stripTags).join("; "));
+        scheduleSave();
+      }
+      editingFacts = false; paintFacts();
+    };
     factsHolder.appendChild(done);
   };
   paintFacts();
