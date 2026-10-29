@@ -6141,6 +6141,28 @@ function buildEstateNotesBlock(item, opts){
   const paint = () => {
     holder.innerHTML = "";
     const has = !richIsEmpty(item.notes);
+    if(has && opts.forTitle && !editing){
+      // Title page: each note line is its own bullet with its own Edit / Delete; lines that name other titles of the estate are left to those pages.
+      const all = splitRichLines(item.notes);
+      const mine = [];
+      all.forEach((ln, idx) => { const m = mentionedTitles(item, stripTags(ln).replace(/&nbsp;/g, " ")); if(!m.length || m.includes(opts.forTitle)) mine.push({ ln, idx }); });
+      const when = notesEffectiveDate(item);
+      for(const { ln, idx } of mine){
+        const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button" data-role="nedit">Edit</button><button class="btn btn-sm btn-ghost" type="button" data-role="ndel">Delete</button></div></div>`);
+        const bullet = row.querySelector(".note-bullet");
+        bullet.innerHTML = ln.replace(/^(\s|&nbsp;)+/i, "");
+        row.querySelector(".notes-date").textContent = when ? fmtDateShort(when) : "";
+        const writeBack = (newLine) => { const next = all.slice(); if(newLine === null) next.splice(idx, 1); else next[idx] = newLine; save(next.join("<br>")); paint(); };
+        bindConfirmDelete(row.querySelector('[data-role="ndel"]'), () => writeBack(null), "Delete");
+        const eb = row.querySelector('[data-role="nedit"]');
+        eb.onclick = () => {
+          if(eb.dataset.on){ const v = sanitizeRichHTML(bullet.innerHTML).trim(); writeBack(v || null); return; }
+          eb.dataset.on = "1"; eb.textContent = "Done"; bullet.contentEditable = "true"; bullet.style.outline = "2px solid var(--line, #c5d0dc)"; bullet.focus();
+        };
+        holder.appendChild(row);
+      }
+      return;
+    }
     if(has && !editing){
       const d = notesEffectiveDate(item);
       const row = el(`<div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button">Edit</button></div><div class="td-readonly-text"></div></div>`);
