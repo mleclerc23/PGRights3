@@ -3871,22 +3871,26 @@ function openTitlePage(item, title){
 }
 /** Every note that applies to one title, newest first, each editable: the estate's own note lines (that don't name other titles),
  *  notes filed under this title on the Action List, and notes written here for a title that isn't on it. */
-function renderTitleNotesList(item, title){
-  const holder = el(`<div></div>`);
+function collectTitleNoteEntries(item, title){
   const entries = [];
-  // 1. estate-level note lines
+  // 1. estate-level note lines (each can carry its own date; otherwise the estate notes' date)
   const lines = splitRichLines(item.notes || "");
   const estDate = notesEffectiveDate(item);
+  const lkey = (h) => stripTags(h).replace(/&nbsp;/g, " ").trim();
   lines.forEach((ln, idx) => {
     const m = mentionedTitles(item, stripTags(ln).replace(/&nbsp;/g, " "));
     if(m.length && !m.includes(title)) return;
-    entries.push({ html: ln.replace(/^(\s|&nbsp;)+/i, ""), date: estDate,
-      setText: (v) => { const next = lines.slice(); if(v === null) next.splice(idx, 1); else next[idx] = v; const nv = next.join("<br>"); const old = item.notes || ""; item.notes = nv; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, nv); scheduleSave(); render(); },
-      del: () => { const next = lines.slice(); next.splice(idx, 1); const nv = next.join("<br>"); const old = item.notes || ""; item.notes = nv; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, nv); scheduleSave(); render(); } });
+    const k = lkey(ln);
+    const own = item.noteLineDates && isValidDate(item.noteLineDates[k]) ? item.noteLineDates[k] : "";
+    const write = (next) => { const nv = next.join("<br>"); const old = item.notes || ""; item.notes = nv; item.updatedAt = new Date().toISOString(); recordChange(item.id, "item", item.id, item.name, "notes", "Estate notes", old, nv); scheduleSave(); render(); };
+    entries.push({ html: ln.replace(/^(\s|&nbsp;)+/i, ""), date: own || estDate, estateLine: true,
+      setText: (v) => { const next = lines.slice(); next[idx] = v; if(own){ const nk = lkey(v); item.noteLineDates[nk] = own; if(nk !== k) delete item.noteLineDates[k]; } write(next); },
+      setDate: (v) => { if(!item.noteLineDates) item.noteLineDates = {}; if(v) item.noteLineDates[k] = v; else delete item.noteLineDates[k]; scheduleSave(); render(); },
+      del: () => { const next = lines.slice(); next.splice(idx, 1); if(item.noteLineDates) delete item.noteLineDates[k]; write(next); } });
   });
   // 2. notes filed under this title on the Action List
   for(const t of item.todos.filter(t => t.kind === "note" && !t.followUp && !richIsEmpty(t.text) && todoOnTitle(t, title, item))){
-    entries.push({ html: t.text, date: logDate(t), locked: t.locked,
+    entries.push({ html: t.text, date: logDate(t), locked: t.locked, todoId: t.id,
       setText: (v) => updateTodo(item, t.id, "text", v), setDate: (v) => updateTodo(item, t.id, "date", v), del: () => removeTodo(item, t.id) });
   }
   // 3. notes written on this page for a title that isn't on the Action List
@@ -3898,6 +3902,11 @@ function renderTitleNotesList(item, title){
   }
   entries.forEach((e, i) => e.i = i);
   entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.i - b.i));
+  return entries;
+}
+function renderTitleNotesList(item, title){
+  const holder = el(`<div></div>`);
+  const entries = collectTitleNoteEntries(item, title);
   for(const e of entries){
     const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row nt-actions"><span class="notes-date"></span><button class="btn btn-ghost nt-btn" type="button" data-role="nedit">Edit</button><button class="btn btn-ghost nt-btn nt-x" type="button" data-role="ndel" title="Delete note">&times;</button></div></div>`);
     const bullet = row.querySelector(".note-bullet"), dateEl = row.querySelector(".notes-date"), eb = row.querySelector('[data-role="nedit"]');
@@ -3923,6 +3932,24 @@ function renderTitleNotesList(item, title){
     holder.appendChild(row);
   }
   return holder;
+}
+/** A Progress row for a note that isn't a to-do record (an estate note line, or a note written on a title's page). */
+function buildNoteEntryProgressRow(e){
+  const row = el(`
+    <div class="progress-row">
+      <div class="progress-when"><span>Note</span><input type="date" class="step-note-date-input" value="${e.date || ""}" /></div>
+      <div class="progress-body"></div>
+      <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete">&times;</button>
+    </div>
+  `);
+  const line = createRichTextLine(e.html || "", "Write it out…", "progress-text");
+  row.querySelector(".progress-body").appendChild(line);
+  bindCommitRich(line, v => { if(v.trim()) e.setText(v); });
+  const di = row.querySelector("input");
+  wrapDateField(di, e.date || "", "Date");
+  di.onchange = (ev) => e.setDate(ev.target.value || "");
+  bindConfirmDelete(row.querySelector('[data-role="pdelete"]'), e.del, "&times;", "Delete?");
+  return row;
 }
 function renderTitlePage(itemId, title){
   const item = STATE.data.items.find(i => i.id === itemId);
@@ -4007,7 +4034,13 @@ function renderTitlePage(itemId, title){
   const prog = el(`<div class="panel"><div class="panel-head"><div><h2>Progress</h2></div></div><div class="panel-pad"></div></div>`);
   const pad = prog.querySelector(".panel-pad");
   if(!hist.length) pad.appendChild(el(`<div class="section-note">Finished to-dos and notes for this title are recorded here.</div>`));
-  for(const t of hist) pad.appendChild(buildProgressRow(item, t));
+  const pstamp = (t) => (t.kind === "note" ? (isValidDate(t.date) ? t.date : t.createdAt) : (t.done ? t.doneAt : t.createdAt)) || "";
+  const prows = hist.map((t, i) => ({ d: pstamp(t), i, node: () => buildProgressRow(item, t) }))
+    .concat(collectTitleNoteEntries(item, title).filter(e => !e.todoId).map((e, i) => ({ d: e.date || "", i: 1000 + i, node: () => buildNoteEntryProgressRow(e) })));
+  prows.sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : a.i - b.i));
+  pad.innerHTML = "";
+  if(!prows.length) pad.appendChild(el(`<div class="section-note">Finished to-dos and notes for this title are recorded here.</div>`));
+  for(const r of prows) pad.appendChild(r.node());
   wrap.appendChild(prog);
 
   // About this title: logline + notes (editable)
