@@ -1249,12 +1249,17 @@ const fileStore = {
   max: 20 * 1024 * 1024,
   label: "20 MB",
   async put(id, file){
-    let r;
+    let r, j = null;
     try{
       r = await fetch(`/api/files?id=${encodeURIComponent(id)}&name=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "x-app-password": ACCESS_PASSWORD, "Content-Type": file.type || "application/octet-stream" }, body: file });
-      const j = await r.json();
-      if(!r.ok || !j || !j.ok) throw new Error("bad response");
-    }catch(e){ throw new Error("File storage isn't set up on the site yet. Add functions/api/files.js to the project and redeploy."); }
+    }catch(e){ throw new Error("Couldn't reach the site to upload (" + (e && e.message ? e.message : "network error") + "). Check your connection and try again."); }
+    try{ j = await r.json(); }catch(e){ j = null; }
+    if(r.ok && j && j.ok) return;
+    if(r.status === 404 || r.status === 405 || (!j && r.ok)) throw new Error("File storage isn't set up on the site yet: /api/files wasn't found. Add functions/api/files.js to the project and redeploy.");
+    if(r.status === 401 || r.status === 403) throw new Error("The site rejected the upload (password). Set APP_PASSWORD in the Cloudflare Pages settings to the same password as /api/data uses, then redeploy.");
+    if(r.status === 413) throw new Error("That file is too large (limit " + this.label + ").");
+    if(r.status === 500) throw new Error("File storage isn't configured: the TRACKER_KV binding is missing on the Pages project (Settings > Functions > KV namespace bindings).");
+    throw new Error("Upload failed (HTTP " + r.status + (j && j.error ? ": " + j.error : "") + ").");
   },
   async get(id){
     const r = await fetch(`/api/files?id=${encodeURIComponent(id)}`, { headers: { "x-app-password": ACCESS_PASSWORD } });
@@ -4550,18 +4555,72 @@ function fmtBytes(n){
   if(n < 1024 * 1024) return Math.round(n / 1024) + " KB";
   return (n / 1024 / 1024).toFixed(1) + " MB";
 }
-/** Open a stored document: viewable types in a new tab, everything else downloads. */
+/** What a stored document is, going by its type and (since browsers often leave the type empty) its file extension. */
+function docKind(doc){
+  const name = String(doc.name || "").toLowerCase(), t = String(doc.type || "").toLowerCase();
+  const ext = name.indexOf(".") >= 0 ? name.split(".").pop() : "";
+  if(t === "application/pdf" || ext === "pdf") return { kind: "pdf", mime: "application/pdf" };
+  const img = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+  if(/^image\/(png|jpe?g|gif|webp|svg\+xml)$/.test(t) || img[ext]) return { kind: "image", mime: /^image\//.test(t) ? t : img[ext] };
+  if(ext === "docx" || t === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return { kind: "docx", mime: t };
+  if((/^text\//.test(t) && t !== "text/html") || ["txt", "md", "csv", "json", "log", "rtf"].includes(ext)) return { kind: "text", mime: "text/plain" };
+  return { kind: "other", mime: t || "application/octet-stream" };
+}
+function loadScriptOnce(src){
+  return new Promise((resolve, reject) => {
+    if(document.querySelector(`script[data-src="${src}"]`)) return resolve();
+    const sc = document.createElement("script"); sc.src = src; sc.dataset.src = src;
+    sc.onload = () => resolve(); sc.onerror = () => reject(new Error("script"));
+    document.head.appendChild(sc);
+  });
+}
+function downloadBlob(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+/** Open a stored document in a viewer on the page (PDFs, images, text, Word .docx); anything else is downloaded. */
 async function openDocument(doc){
-  const viewable = /^(application\/pdf|image\/(png|jpe?g|gif|webp)|text\/plain)$/.test(doc.type || "");
-  const win = viewable ? window.open("", "_blank") : null;
+  const info = docKind(doc);
   try{
-    const blob = await fileStore.get(doc.id);
-    const url = URL.createObjectURL(new Blob([blob], { type: doc.type || blob.type || "application/octet-stream" }));
-    if(win){ win.location.href = url; }
-    else{ const a = document.createElement("a"); a.href = url; a.download = doc.name; document.body.appendChild(a); a.click(); a.remove(); }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const raw = await fileStore.get(doc.id);
+    const blob = new Blob([raw], { type: info.mime });
+    if(info.kind === "other"){ downloadBlob(blob, doc.name); showToast("This kind of file can't be previewed, so it was downloaded."); return; }
+    const url = URL.createObjectURL(blob);
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(15,23,35,.62);display:flex;align-items:center;justify-content:center;padding:3vh 3vw;";
+    ov.innerHTML = `<div style="background:#fff;border:2px solid #1a2433;border-radius:16px;width:min(1100px,100%);height:100%;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:2px solid #1a2433;">
+        <div style="flex:1;min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-role="vname"></div>
+        <button class="btn btn-sm btn-ghost" type="button" data-role="vdl">Download</button>
+        <button class="btn btn-sm btn-ghost" type="button" data-role="vclose" title="Close" style="font-size:18px;">&times;</button>
+      </div>
+      <div data-role="vbody" style="flex:1;min-height:0;overflow:auto;background:#f3f6fa;display:flex;"></div></div>`;
+    ov.querySelector('[data-role="vname"]').textContent = doc.name;
+    const body = ov.querySelector('[data-role="vbody"]');
+    const close = () => { document.removeEventListener("keydown", onKey); ov.remove(); URL.revokeObjectURL(url); };
+    const onKey = (e) => { if(e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    ov.addEventListener("mousedown", (e) => { if(e.target === ov) close(); });
+    ov.querySelector('[data-role="vclose"]').onclick = close;
+    ov.querySelector('[data-role="vdl"]').onclick = () => downloadBlob(blob, doc.name);
+    if(info.kind === "pdf"){
+      const fr = document.createElement("iframe"); fr.src = url; fr.style.cssText = "border:0;flex:1;width:100%;height:100%;"; body.appendChild(fr);
+    }else if(info.kind === "image"){
+      const im = document.createElement("img"); im.src = url; im.alt = doc.name; im.style.cssText = "max-width:100%;max-height:100%;margin:auto;object-fit:contain;"; body.appendChild(im);
+    }else if(info.kind === "text"){
+      const pre = document.createElement("pre"); pre.style.cssText = "margin:0;padding:18px 22px;white-space:pre-wrap;word-break:break-word;font:13px/1.5 var(--font-mono, monospace);width:100%;background:#fff;"; pre.textContent = await blob.text(); body.appendChild(pre);
+    }else if(info.kind === "docx"){
+      try{
+        await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+        const res = await window.mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+        const fr = document.createElement("iframe"); fr.setAttribute("sandbox", ""); fr.style.cssText = "border:0;flex:1;width:100%;height:100%;background:#fff;";
+        fr.srcdoc = `<!doctype html><meta charset="utf-8"><style>body{font:15px/1.55 Georgia,serif;max-width:760px;margin:24px auto;padding:0 20px;color:#111}table{border-collapse:collapse}td,th{border:1px solid #bbb;padding:4px 8px}img{max-width:100%}</style>${res.value}`;
+        body.appendChild(fr);
+      }catch(err){ URL.revokeObjectURL(url); downloadBlob(blob, doc.name); showToast("Couldn't preview that Word file here, so it was downloaded."); return; }
+    }
+    document.body.appendChild(ov);
   }catch(e){
-    if(win) win.close();
     showToast("Couldn't open that file.");
   }
 }
@@ -4606,7 +4665,7 @@ function renderDocumentsPanel(item, opts){
   const rowFor = (d) => {
     const r = el(`
       <div class="doc-row">
-        <div class="doc-main"><button class="doc-name" type="button" title="Open / download">${escapeHtml(d.name)}</button>
+        <div class="doc-main"><button class="doc-name" type="button" title="Open">${escapeHtml(d.name)}</button>
           <div class="doc-meta">${escapeHtml(fmtBytes(d.size))} · ${escapeHtml(isValidDate((d.uploadedAt || "").slice(0, 10)) ? fmtDateShort(d.uploadedAt.slice(0, 10)) : "")}</div></div>
         <span class="pill pill-pending">${d.title ? escapeHtml(stripTags(d.title)) : "Estate"}</span>
         <button class="btn btn-sm btn-ghost" type="button" data-role="del">Delete</button>
