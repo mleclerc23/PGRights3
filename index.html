@@ -1439,6 +1439,12 @@ document.addEventListener("keydown", (e) => {
 /** Keep estates and each estate's titles A-Z (ignoring a leading "The"); blank ones last. */
 function normalizeOrder(boot){
   const d = STATE.data; if(!d || !Array.isArray(d.items)) return;
+  // Estate names are always Capitalised Words, never ALL CAPS. Titles in ALL CAPS are fixed once (they show in capitals on the Action List anyway).
+  for(const it of d.items){ const n = fixCaps(it.name); if(n !== it.name) it.name = n; }
+  if(!d.__titleCapsFixed){
+    d.__titleCapsFixed = true;
+    for(const it of d.items) for(const t of (it.titles || []).slice()){ const n = fixCaps(t); if(n !== t) renameTitleData(it, t, n); }
+  }
   // Estate notes carry a date: the one typed in, else the day they were first written (legacy notes: the estate's creation date).
   for(const it of d.items){
     if(!richIsEmpty(it.notes)){ if(!isValidDate(it.notesCreatedAt)) it.notesCreatedAt = (boot && typeof it.createdAt === "string" && isValidDate(it.createdAt.slice(0, 10))) ? it.createdAt.slice(0, 10) : todayISO(); }
@@ -3816,7 +3822,9 @@ function renderTitlePage(itemId, title){
   wrap.appendChild(back);
   const head = el(`
     <div class="title-page-head">
-      <h1 class="title-page-name">${escapeHtml(stripTags(title))}</h1>
+      <h1 class="title-page-name" id="t-name">${escapeHtml(stripTags(title))}</h1>
+      <div id="t-name-edit" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;"><input type="text" id="t-name-input" class="text-input" style="font-size:26px;font-weight:800;max-width:520px;" /><button class="btn btn-sm" id="t-name-save" type="button">Save</button><button class="btn btn-sm btn-ghost" id="t-name-cancel" type="button">Cancel</button></div>
+      <button class="btn btn-sm btn-ghost" id="t-name-btn" type="button" style="margin:2px 0 4px;">Rename title</button>
       <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
         <select class="phase-status-select" id="t-category">
@@ -3828,6 +3836,15 @@ function renderTitlePage(itemId, title){
   `);
   head.querySelector('[data-role="open"]').onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
   head.querySelector("#t-category").onchange = (e) => setTitleCategory(item, title, e.target.value);
+  {
+    const nameEl = head.querySelector("#t-name"), box = head.querySelector("#t-name-edit"), inp = head.querySelector("#t-name-input"), btn = head.querySelector("#t-name-btn");
+    const close = () => { box.style.display = "none"; nameEl.style.display = ""; btn.style.display = ""; };
+    btn.onclick = () => { inp.value = stripTags(title); nameEl.style.display = "none"; btn.style.display = "none"; box.style.display = "flex"; inp.focus(); inp.select(); };
+    const save = () => { const v = inp.value.trim(); if(!v || v === stripTags(title)){ close(); return; } if(!renameTitle(item, title, v)){ inp.style.outline = "2px solid var(--red)"; inp.title = "Another title in this estate already has that name"; } };
+    head.querySelector("#t-name-save").onclick = save;
+    head.querySelector("#t-name-cancel").onclick = close;
+    inp.onkeydown = (e) => { if(e.key === "Enter") save(); else if(e.key === "Escape") close(); };
+  }
   head.querySelector("#t-priority").onclick = () => setTitlePriority(item, title, !isTitlePriority(item, title));
   wrap.appendChild(head);
 
@@ -4938,6 +4955,52 @@ function renderTitlesSection(item){
  * pointing at the same set of titles — a title added/renamed/removed in
  * either place is reflected in the other, and priority (which is tracked
  * once per title text, not per-list) is shared automatically as a result. */
+/** ALL-CAPS text (more than one word, or longer than 4 letters) becomes Capitalised Words; anything with lowercase letters is left alone. */
+function fixCaps(str){
+  const v = String(str == null ? "" : str);
+  const plain = v.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ");
+  if(!/[A-Z]/.test(plain) || /[a-z]/.test(plain)) return v;
+  if(!/\s/.test(plain.trim()) && plain.replace(/[^A-Za-z]/g, "").length <= 4) return v;
+  const small = new Set(["of","the","and","a","an","in","on","to","for","at","by","or","vs"]);
+  let first = true;
+  return v.replace(/[A-Za-z][A-Za-z']*/g, (w) => { const l = w.toLowerCase(); const out = (!first && small.has(l)) ? l : l.charAt(0).toUpperCase() + l.slice(1); first = false; return out; });
+}
+/** Renames a title everywhere it is used in one estate (no save / render). Returns the stored new name, or null if it can't be applied. */
+function renameTitleData(item, oldT, newT){
+  newT = String(newT || "").trim();
+  if(!newT || newT === oldT) return null;
+  const k = (x) => stripTags(x).trim().toLowerCase().replace(/\s+/g, " ");
+  const idx = (item.titles || []).indexOf(oldT);
+  if(idx === -1) return null;
+  if((item.titles || []).some((t, i) => i !== idx && k(t) === k(newT))) return null;   // another title already has that name
+  const oldKey = k(oldT);
+  item.titles[idx] = newT;
+  const swapList = (arr) => Array.isArray(arr) ? arr.map(t => t === oldT ? newT : t) : arr;
+  // combined tags ("A / B") and typed headings: swap just this title's segment
+  const swapCombo = (str) => {
+    if(typeof str !== "string" || !str) return str;
+    if(str === oldT) return newT;
+    if(str.indexOf("/") === -1) return k(str) === oldKey ? newT : str;
+    return str.split("/").map(seg => k(seg) === oldKey ? " " + newT + " " : seg).join("/").replace(/\s*\/\s*/g, " / ").trim();
+  };
+  for(const td of (item.titleDetails || [])) if(td.title === oldT) td.title = newT;
+  for(const t of (item.todos || [])) if(t.title) t.title = swapCombo(t.title);
+  for(const d of (item.documents || [])) if(d.title) d.title = swapCombo(d.title);
+  if(item.todoTitleLabel){ const lbl = swapCombo(item.todoTitleLabel); item.todoTitleLabel = (lbl === newT || String(item.todoTitleLabel).indexOf("/") === -1) ? item.todoTitleLabel : lbl.toUpperCase(); }
+  item.actionTitles = swapList(item.actionTitles);
+  item.priorityTitles = swapList(item.priorityTitles);
+  item.demotedTitles = swapList(item.demotedTitles);
+  if(item.titleCategory && Object.prototype.hasOwnProperty.call(item.titleCategory, oldT)){ item.titleCategory[newT] = item.titleCategory[oldT]; delete item.titleCategory[oldT]; }
+  if(STATE.currentTitle && STATE.currentTitle.itemId === item.id && STATE.currentTitle.title === oldT) STATE.currentTitle.title = newT;
+  return newT;
+}
+function renameTitle(item, oldT, newT){
+  const done = renameTitleData(item, oldT, newT);
+  if(!done) return false;
+  recordChange(item.id, "item", item.id, item.name, "titles", "Title renamed", stripTags(oldT), stripTags(done));
+  scheduleSave(); render();
+  return true;
+}
 function ensureTitleTag(item, title){
   if(!title) return;
   if(!item.titles) item.titles = [];
@@ -4965,6 +5028,7 @@ function removeTitleDetailByText(item, title){
 }
 /** Create a brand-new estate (same defaults as "+ New item") without re-rendering; caller renders. */
 function createEstateRecord(name){
+  name = fixCaps(name);
   const now = new Date().toISOString();
   const item = {
     id: uid("itm"), name, owner: "", currentPhase: "Call", status: "",
@@ -4992,7 +5056,7 @@ function attachTitleRecord(item, title){
   return title;
 }
 function addTitle(item, value){
-  const title = value.trim();
+  const title = fixCaps(value.trim());
   if(!title) return;
   if(!item.titles) item.titles = [];
   item.titles.push(title);
