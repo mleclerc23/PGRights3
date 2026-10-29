@@ -3526,7 +3526,14 @@ function renderTodoTab(){
       syncCollapseAll();
     });
     const itemsHolder = entry.querySelector('[data-holder="items"]');
-    if(!secs) itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
+    if(!secs){
+      // A box whose items all belong to one title: new items must join that title, not land untitled
+      // (untitled items would show up under the estate's other titles).
+      const visAll = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+      const tags = Array.from(new Set(visAll.filter(t => t.title).map(t => t.title)));
+      if(tags.length === 1 && item.id !== GENERAL_ID) itemsHolder.appendChild(renderTodoItemsEditor(item, { title: tags[0], exact: true, withUntagged: true, noTag: true }));
+      else itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
+    }
     else secs.forEach((sec, i) => {
       if(!i){
         const first = el(`<div class="todo-sec-first"></div>`);
