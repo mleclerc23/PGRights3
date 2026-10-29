@@ -1444,6 +1444,7 @@ function normalizeOrder(boot){
     if(!richIsEmpty(it.notes)){ if(!isValidDate(it.notesCreatedAt)) it.notesCreatedAt = (boot && typeof it.createdAt === "string" && isValidDate(it.createdAt.slice(0, 10))) ? it.createdAt.slice(0, 10) : todayISO(); }
     else if(it.notesCreatedAt || it.notesDate){ it.notesCreatedAt = ""; it.notesDate = ""; }
   }
+  for(const it of d.items) if(typeof it.notes === "string" && it.notes.includes("Notes carried over from steps")) migrateCarriedStepNotes(it);
   const cmp = (a, b) => { const ka = sortKey(a), kb = sortKey(b); return ka === kb ? 0 : !ka ? 1 : !kb ? -1 : ka.localeCompare(kb); };
   if(boot){   // one-time: to-dos already completed read as progress too (the original wording is kept for "Reopen")
     for(const it of [...d.items, d.general].filter(Boolean)) for(const t of (it.todos || [])){
@@ -1585,9 +1586,8 @@ function updateEstateCategory(item, value, opts){
  * into the general "Additional Notes" field too. Guarded so re-entering
  * hold later doesn't duplicate the copy. */
 function consolidateStepNotesIntoGeneralNotes(item){
-  const marker = "Notes carried over from steps (Hold for Now)";
-  if((item.notes || "").includes(marker)) return;
-
+  // Moving to Hold for Now carries the steps' notes over as ordinary dated notes on the estate (once).
+  if(item.stepNotesCarried) return;
   const seq = buildStepSequence(item);
   const allNotes = [];
   for(const entry of seq){
@@ -1600,15 +1600,32 @@ function consolidateStepNotesIntoGeneralNotes(item){
       allNotes.push({ stepLabel: stepLbl, date: d, text: n.text });
     }
   }
+  item.stepNotesCarried = true;
   if(!allNotes.length) return;
   allNotes.sort((a, b) => (a.date || "") < (b.date || "") ? -1 : (a.date || "") > (b.date || "") ? 1 : 0);
-
-  const lines = allNotes
-    .map(n => `${n.date ? fmtDateShort(n.date) : "No date"} — ${escapeHtml(n.stepLabel)}: ${n.text}`)
-    .join("<br>");
-  const old = item.notes || "";
-  item.notes = old + (old ? "<br><br>" : "") + `<b>${marker}:</b><br>` + lines;
-  recordChange(item.id, "item", item.id, item.name, "notes", "Additional Notes", old, item.notes, "Step notes carried over — marked Hold for Now.");
+  migrateTodos(item);
+  for(const n of allNotes){
+    item.todos.push({ id: uid("tk"), text: `${escapeHtml(n.stepLabel)}: ${n.text}`, date: n.date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: "", kind: "note" });
+    recordChange(item.id, "item", item.id, item.name, "noteAdd", "Note added", "", stripTags(n.text), "Step note carried over - marked Hold for Now.");
+  }
+}
+/** One-time clean-up of the old "Notes carried over from steps (Hold for Now)" block that used to be pasted into the estate notes. */
+function migrateCarriedStepNotes(item){
+  const html = item.notes || "";
+  const m = html.match(/(?:<br\s*\/?>\s*)*<b>\s*Notes carried over from steps \(Hold for Now\):?\s*<\/b>:?\s*(?:<br\s*\/?>)?([\s\S]*)$/i);
+  if(!m) return;
+  const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const toISO = (txt) => { const x = txt.trim().match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2}),\s*(\d{4})$/); if(!x) return ""; const mi = months.indexOf(x[1].slice(0, 3).toLowerCase()); return mi < 0 ? "" : `${x[3]}-${String(mi + 1).padStart(2, "0")}-${String(+x[2]).padStart(2, "0")}`; };
+  migrateTodos(item);
+  for(const ln of m[1].split(/<br\s*\/?>/i).map(x => x.trim()).filter(Boolean)){
+    const p = ln.match(/^(.{3,16}?)\s+(?:—|&mdash;|-)\s+([\s\S]+)$/);
+    const date = p ? toISO(p[1]) : "";
+    const text = p && (date || /^no date$/i.test(p[1].trim())) ? p[2] : ln;
+    if(richIsEmpty(text)) continue;
+    item.todos.push({ id: uid("tk"), text, date, notes: "", done: false, createdAt: date || todayISO(), doneAt: "", title: "", kind: "note" });
+  }
+  item.notes = html.slice(0, m.index).replace(/(?:<br\s*\/?>\s*)+$/i, "");
+  item.stepNotesCarried = true;
 }
 /** An estate on Hold for Now with a follow-up date gets an ordinary to-do on the Action List once that date arrives. */
 function ensureFollowUpTodos(){
