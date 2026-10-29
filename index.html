@@ -769,8 +769,10 @@
 </style>
 <style>
   .about-facts{ gap:8px 26px !important; }
-  .about-facts b{ display:block; font-size:10px; color:#8a97a6; margin:0 0 2px; }
-  .about-facts span{ font-size:15px; font-weight:600; color:#141c28; }
+  .about-facts b{ display:inline !important; font-size:11px !important; font-weight:700 !important; color: var(--red) !important; margin:0 6px 0 0 !important; }
+  .about-facts span{ font-size:13px; font-weight:400; color:#000; line-height:1.55; }
+  .about-panel .td-readonly-text{ color:#000; }
+  .about-panel .field-label{ font-weight:700 !important; color: var(--red) !important; font-size:11px !important; }
 </style>
 
 </head>
@@ -3702,10 +3704,10 @@ function renderTitlePage(itemId, title){
     ["Based on", td.basedOn], ["Original run", td.originalRun], ["Broadcaster", td.broadcaster],
   ].map(([k, v]) => [k, stripTags(v)]).filter(([, v]) => v);
   const about = el(`
-    <div class="panel">
+    <div class="panel about-panel">
       <div class="panel-head"><div><h2>About this title</h2></div></div>
       <div class="panel-pad">
-        ${facts.length ? `<div class="title-card-facts about-facts" style="margin-bottom:14px;">${facts.map(([k, v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div>` : ""}
+        <div data-holder="facts" style="margin-bottom:14px;"></div>
         <span class="field-label">Logline</span>
         <div data-holder="logline"></div>
         <span class="field-label" style="margin-top:12px;display:block;">Title notes</span>
@@ -3721,6 +3723,58 @@ function renderTitlePage(itemId, title){
     recordChange(item.id, "item", item.id, item.name, "titleDetails." + field, stripTags(title) + " " + label, old, v);
     scheduleSave();
   };
+  // Facts (genre, original/adapted, episodes, based on, run, broadcaster): read-only with Edit
+  const factDefs = [
+    ["genre", "Genre", "text", "e.g. Mystery, Drama"], ["originalOrAdapted", "Original / adapted", "select"],
+    ["episodeCount", "Episodes", "number", "e.g. 8"], ["basedOn", "Based on", "text", "Source material"],
+    ["originalRun", "Original run", "text", "e.g. 1998-2003"], ["broadcaster", "Broadcaster", "text", "e.g. BBC One"],
+  ];
+  const plain = (h) => { const d = document.createElement("div"); d.innerHTML = h || ""; return (d.textContent || "").trim(); };
+  const factsHolder = about.querySelector('[data-holder="facts"]');
+  let editingFacts = false;
+  const paintFacts = () => {
+    factsHolder.innerHTML = "";
+    const cur = getTd() || {};
+    const filled = factDefs.filter(([k]) => plain(cur[k]));
+    if(filled.length && !editingFacts){
+      const row = el(`<div class="td-top" style="align-items:flex-start;gap:10px;"><div class="title-card-facts about-facts" style="flex:1;margin-top:0;"></div><button class="btn btn-sm btn-ghost" type="button">Edit</button></div>`);
+      const box = row.querySelector(".about-facts");
+      for(const [k, label] of filled){
+        const sp = document.createElement("span"); const b = document.createElement("b"); b.textContent = label;
+        sp.appendChild(b); sp.appendChild(document.createTextNode(" " + plain(cur[k]))); box.appendChild(sp);
+      }
+      row.querySelector("button").onclick = () => { editingFacts = true; paintFacts(); };
+      factsHolder.appendChild(row);
+      return;
+    }
+    const grid = el(`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px 14px;"></div>`);
+    const inputs = {};
+    for(const [k, label, type, ph] of factDefs){
+      const wrapF = el(`<div><span class="field-label"></span></div>`);
+      wrapF.querySelector(".field-label").textContent = label;
+      let inp;
+      if(type === "select"){
+        inp = el(`<select class="text-input"><option value="">—</option><option value="Original">Original</option><option value="Adapted">Adapted</option></select>`);
+        inp.value = plain(cur[k]);
+      }else{
+        inp = document.createElement("input"); inp.type = type; inp.className = "text-input"; inp.placeholder = ph || "";
+        if(type === "number") inp.min = "0";
+        inp.value = plain(cur[k]);
+      }
+      inputs[k] = inp; wrapF.appendChild(inp); grid.appendChild(wrapF);
+    }
+    const saveAll = () => {
+      for(const [k, label] of factDefs){
+        const v = escapeHtml(inputs[k].value.trim());
+        if(v !== (cur[k] || "") && (v || cur[k])) saveTd(k, label.toLowerCase())(v);
+      }
+    };
+    factsHolder.appendChild(grid);
+    const done = el(`<button class="btn btn-sm" type="button" style="margin-top:8px;">Done</button>`);
+    done.onclick = () => { saveAll(); editingFacts = false; paintFacts(); };
+    factsHolder.appendChild(done);
+  };
+  paintFacts();
   // Logline and Title notes: editable until entered, then read-only (Edit to change).
   const makeLockedField = (holder, field, label, placeholder, rows) => {
     let editing = false;
