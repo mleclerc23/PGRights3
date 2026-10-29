@@ -2901,7 +2901,7 @@ function buildProgressRow(item, t, opts){
         ${!isNote && isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
       </div>
       ${t.urgent && !t.done ? `<span class="pill pill-urgent">URGENT</span>` : ""}
-      <span class="pill ${isNote ? "pill-pending" : (t.done ? "pill-onplan" : "pill-pending")}">${isNote ? "note" : (t.done ? "done" : "open")}</span>
+      ${(!isNote && t.done) ? "" : `<span class="pill pill-pending">${isNote ? "note" : "open"}</span>`}
       ${t.done && !t.locked ? `<button class="btn btn-sm btn-ghost" data-role="reopen">Reopen</button>` : ""}
       ${t.done ? lockButtonHTML(t) : ""}
       <button class="btn btn-sm btn-ghost progress-delete" data-role="pdelete" ${t.locked ? "disabled title=\"Unlock to delete\"" : ""}>Delete</button>
