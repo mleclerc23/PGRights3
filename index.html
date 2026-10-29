@@ -1573,9 +1573,7 @@ function updateEstateCategory(item, value, opts){
   if(!(opts && opts.keepTitles)) item.titleCategory = {};   // setting the whole estate sets every title
   recordChange(item.id, "item", item.id, item.name, "estateCategory", "Category", estateCategoryLabel(old), estateCategoryLabel(value));
   if(value === "hold"){
-    const followUp = addDaysISO(todayISO(), HOLD_FOLLOWUP_DAYS);
-    item.holdFollowUpDate = followUp;
-    recordChange(item.id, "item", item.id, item.name, "holdFollowUpDate", "Follow-up date", "", followUp, "Set automatically — marked Hold for Now.");
+    // No automatic follow-up any more: a follow-up date is optional and is added by hand.
     consolidateStepNotesIntoGeneralNotes(item);
   }
   scheduleSave();
@@ -1612,8 +1610,25 @@ function consolidateStepNotesIntoGeneralNotes(item){
   item.notes = old + (old ? "<br><br>" : "") + `<b>${marker}:</b><br>` + lines;
   recordChange(item.id, "item", item.id, item.name, "notes", "Additional Notes", old, item.notes, "Step notes carried over — marked Hold for Now.");
 }
+/** An estate on Hold for Now with a follow-up date gets an ordinary to-do on the Action List once that date arrives. */
+function ensureFollowUpTodos(){
+  const today = todayISO();
+  let changed = false;
+  for(const item of (STATE.data && STATE.data.items) || []){
+    const d = item.holdFollowUpDate;
+    if(item.estateCategory !== "hold" || !isValidDate(d) || d > today || item.holdFollowUpTodoFor === d) continue;
+    migrateTodos(item);
+    item.todos.push({ id: uid("tk"), text: escapeHtml(item.holdFollowUpLabel || "Follow up"), date: d, notes: "", done: false, createdAt: today, doneAt: "", title: "", followUp: true });
+    item.holdFollowUpTodoFor = d;
+    item.actionHidden = false;
+    recordChange(item.id, "item", item.id, item.name, "todoAdd", "Follow-up to-do added", "", "Follow up (" + d + ")");
+    changed = true;
+  }
+  if(changed) scheduleSave();
+}
 function updateHoldFollowUpDate(item, value){
-  if(!isValidDate(value)) return;
+  if(value && !isValidDate(value)) return;
+  value = value || "";
   const old = item.holdFollowUpDate || "";
   if(old === value) return;
   item.holdFollowUpDate = value;
@@ -3383,7 +3398,8 @@ function renderTodoTab(){
   const today = todayISO();
   const open = STATE.data.items.filter(i => !(i.stepActuals && i.stepActuals.target_rights_secured));
   for(const i of open) migrateTodos(i);
-  const holdDate = (i) => (i.estateCategory === "hold" && isValidDate(i.holdFollowUpDate) && i.todoFollowUpDismissed !== i.holdFollowUpDate) ? i.holdFollowUpDate : null;
+  const holdDate = () => null;   // a follow-up is a real to-do now (see ensureFollowUpTodos)
+  ensureFollowUpTodos();
   // A to-do that was urgent keeps its box where it was for the rest of the day it is finished, so checking it off never makes the box jump away.
   const hasUrgent = (i) => (i.todos || []).some(t => t.urgent && t.kind !== "note" && !richIsEmpty(t.text) && (!t.done || t.doneAt === today));
   const general = getGeneralItem();
@@ -4448,8 +4464,9 @@ function renderItemDetail(itemId){
         </select>` : ""}
         ${item.estateCategory === "hold" ? `
         <div class="hold-followup-field" style="margin-top:4px;">
-          <span class="date-pair-label">Follow up</span>
+          <span class="date-pair-label">Follow up (optional)</span>
           <input type="date" class="date-input" id="f-hold-followup" value="${item.holdFollowUpDate && isValidDate(item.holdFollowUpDate) ? item.holdFollowUpDate : ""}" />
+          ${item.holdFollowUpDate && isValidDate(item.holdFollowUpDate) ? `<button class="btn btn-sm btn-ghost" id="f-hold-followup-clear" type="button">Clear</button>` : ""}
         </div>` : ""}
       </div>
     </div>
@@ -4465,6 +4482,8 @@ function renderItemDetail(itemId){
   if(holdFollowUpInput){
     wrapDateField(holdFollowUpInput, item.holdFollowUpDate);
     holdFollowUpInput.onchange = (e) => { if(e.target.value) updateHoldFollowUpDate(item, e.target.value); };
+    const clr = head.querySelector("#f-hold-followup-clear");
+    if(clr) clr.onclick = () => updateHoldFollowUpDate(item, "");
   }
   head.querySelector("#titles-row").appendChild(renderTitlesSection(item));
   const imdbInput = head.querySelector("#f-writer-imdb");
