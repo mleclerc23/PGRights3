@@ -2528,6 +2528,12 @@ function todoSections(item){
   const tagged = Array.from(new Set(vis.filter(t => t.title).map(t => t.title).concat(pinned)));
   const untagged = vis.some(t => !t.title);
   if(!tagged.length || (tagged.length === 1 && !untagged && vis.some(t => t.title === tagged[0]))) return null;
+  // A heading naming several titles ("Z-Cars / Softly, Softly") keeps everything under it together: one box for that set of titles.
+  if(untagged){
+    const own = stripTags(item.todoTitleLabel || "").trim();
+    const L = own ? matchTitlesIn(item, own) : null;
+    if(L && L.length >= 2 && tagged.every(t => L.includes(t))) return null;
+  }
   const secs = [];
   let mergeInto = null;
   if(untagged){
@@ -3641,7 +3647,9 @@ function renderTodoTab(){
       // (untitled items would show up under the estate's other titles).
       const visAll = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
       const tags = Array.from(new Set(visAll.filter(t => t.title).map(t => t.title)));
-      if(tags.length === 1 && item.id !== GENERAL_ID) itemsHolder.appendChild(renderTodoItemsEditor(item, { title: tags[0], exact: true, withUntagged: true, noTag: true }));
+      const ownL = matchTitlesIn(item, stripTags(item.todoTitleLabel || "").trim());
+      if(ownL && ownL.length >= 2 && tags.every(t => ownL.includes(t))) itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
+      else if(tags.length === 1 && item.id !== GENERAL_ID) itemsHolder.appendChild(renderTodoItemsEditor(item, { title: tags[0], exact: true, withUntagged: true, noTag: true }));
       else itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
     }
     else secs.forEach((sec, i) => {
