@@ -3937,9 +3937,9 @@ function renderTitlePage(itemId, title){
   wrap.appendChild(back);
   const head = el(`
     <div class="title-page-head">
-      <h1 class="title-page-name" id="t-name">${escapeHtml(stripTags(title))}</h1>
+      <h1 class="title-page-name" id="t-name" title="Double-click to rename" style="cursor:text;">${escapeHtml(stripTags(title))}</h1>
       <div id="t-name-edit" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;"><input type="text" id="t-name-input" class="text-input" style="font-size:26px;font-weight:800;max-width:520px;" /><button class="btn btn-sm" id="t-name-save" type="button">Save</button><button class="btn btn-sm btn-ghost" id="t-name-cancel" type="button">Cancel</button></div>
-      <button class="btn btn-sm btn-ghost" id="t-name-btn" type="button" style="margin:2px 0 4px;">Rename title</button>
+
       <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
         <select class="phase-status-select" id="t-category">
@@ -3952,9 +3952,9 @@ function renderTitlePage(itemId, title){
   head.querySelector('[data-role="open"]').onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
   head.querySelector("#t-category").onchange = (e) => setTitleCategory(item, title, e.target.value);
   {
-    const nameEl = head.querySelector("#t-name"), box = head.querySelector("#t-name-edit"), inp = head.querySelector("#t-name-input"), btn = head.querySelector("#t-name-btn");
-    const close = () => { box.style.display = "none"; nameEl.style.display = ""; btn.style.display = ""; };
-    btn.onclick = () => { inp.value = stripTags(title); nameEl.style.display = "none"; btn.style.display = "none"; box.style.display = "flex"; inp.focus(); inp.select(); };
+    const nameEl = head.querySelector("#t-name"), box = head.querySelector("#t-name-edit"), inp = head.querySelector("#t-name-input");
+    const close = () => { box.style.display = "none"; nameEl.style.display = ""; };
+    nameEl.ondblclick = () => { inp.value = stripTags(title); nameEl.style.display = "none"; box.style.display = "flex"; inp.focus(); inp.select(); };
     const save = () => { const v = inp.value.trim(); if(!v || v === stripTags(title)){ close(); return; } if(!renameTitle(item, title, v)){ inp.style.outline = "2px solid var(--red)"; inp.title = "Another title in this estate already has that name"; } };
     head.querySelector("#t-name-save").onclick = save;
     head.querySelector("#t-name-cancel").onclick = close;
