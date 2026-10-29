@@ -834,6 +834,15 @@ function wrapDateField(inputEl, value, placeholder){
   display.className = "date-field-display" + (valid ? "" : " placeholder");
   display.textContent = valid ? fmtDate(value) : (placeholder || "Select date");
   wrapper.appendChild(display);
+  inputEl.dataset.ph = placeholder || "Select date";
+  // keep the visible date in step with what was picked (and fall back to the placeholder when cleared)
+  const sync = () => {
+    const v = inputEl.value, ok = isValidDate(v);
+    display.className = "date-field-display" + (ok ? "" : " placeholder");
+    display.textContent = ok ? fmtDate(v) : (inputEl.dataset.ph || "Select date");
+  };
+  inputEl.addEventListener("input", sync);
+  inputEl.addEventListener("change", sync);
   return wrapper;
 }
 function daysBetween(start, end){
@@ -2801,7 +2810,8 @@ function renderTodoItemsEditor(item, opts){
     addText.placeholder = mode === "note" ? "Write a note…" : (mode === "title" ? "First to-do for it (optional)…" : "Add a to-do…");
     const ti = add.querySelector('[data-role="add-title"]'); if(ti) ti.hidden = mode !== "title";
     const disp = dateWrap.querySelector ? dateWrap.querySelector(".date-field-display.placeholder") : null;
-    if(disp) disp.textContent = mode === "note" ? "Date (optional)" : "Target date";
+    addDate.dataset.ph = mode === "note" ? "Date (optional)" : "Target date";
+    if(disp) disp.textContent = addDate.dataset.ph;
     todoAddMode.set(addKey, mode);
   };
   add.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; applyMode(); addText.focus(); });
@@ -2821,8 +2831,7 @@ function renderTodoItemsEditor(item, opts){
       return;
     }
     if(!addText.value.trim()) return;
-    todoAddOpen.add(addKey);
-    todoAddFocus = addKey;
+    todoAddOpen.delete(addKey);   // the form closes once the item is published
     addTodo(item, addText.value, addDate.value || "", onlyTitle, mode);
   };
   add.querySelector('[data-role="add-toggle"]').onclick = () => {
