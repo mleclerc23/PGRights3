@@ -3436,7 +3436,7 @@ function renderTodoTab(){
   const ordIdx = (i) => { const k = order.indexOf(i.id); return k === -1 ? 1e9 : k; };
   const entryLabel = (i) => { const sc = todoSections(i); return (sc ? sc[0].label : todoTitlesLabel(i)) || i.name; };
   const rows = open.concat([general])
-    .filter(i => i.id === GENERAL_ID || (!i.actionHidden && openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i))))
+    .filter(i => i.id === GENERAL_ID || (!i.actionHidden && (openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i)))))
     .sort((a, b) => {
       // Urgent first, then General, then everything else alphabetically by title / estate.
       if(hasUrgent(a) !== hasUrgent(b)) return hasUrgent(a) ? -1 : 1;
