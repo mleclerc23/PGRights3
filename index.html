@@ -2309,6 +2309,30 @@ function openNotes(item){
   migrateTodos(item);
   return item.todos.filter(t => t.kind === "note" && !richIsEmpty(t.text));
 }
+/** Is this title currently on the Action List (pursuing, priority, and with something open or pinned there)? */
+function titleOnActionList(item, title){
+  if(item.actionHidden || titleCategoryOf(item, title) === "hold" || !isTitlePriority(item, title)) return false;
+  if((item.actionTitles || []).includes(title)) return true;
+  return item.todos.some(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done) && todoOnTitle(t, title, item));
+}
+/** A note written on a title's own page. If the title is on the Action List it becomes an ordinary Action List note (bullet);
+ *  otherwise it is kept in the title's Notes panel (item.titleNotes), and the Action List is not touched. */
+function addTitleNote(item, title, text, date){
+  const value = (text || "").trim();
+  if(!value) return;
+  migrateTodos(item);
+  if(titleOnActionList(item, title)){
+    const multi = (item.titles || []).filter(t => stripTags(t)).length > 1;
+    addTodo(item, value, date || "", multi ? title : "", "note");
+    return;
+  }
+  if(!Array.isArray(item.titleNotes)) item.titleNotes = [];
+  item.titleNotes.push({ id: uid("tn"), title, text: escapeHtml(value), date: date || "", createdAt: todayISO() });
+  item.updatedAt = new Date().toISOString();
+  recordChange(item.id, "item", item.id, item.name, "noteAdd", "Note added", "", value);
+  scheduleSave();
+  render();
+}
 function sortedTodos(list){
   // Urgent first; otherwise the order is whatever the user dragged them into.
   return list.slice().sort((a, b) => (Boolean(a.urgent) === Boolean(b.urgent)) ? 0 : (a.urgent ? -1 : 1));
@@ -2509,6 +2533,15 @@ function titleTokens(x){
 }
 /** If `text` is made up entirely of this estate's own titles - however they are separated (slash, comma, dash, "and" or
  *  just a space) - returns those titles; otherwise null. */
+/** Titles of this estate that a piece of text names anywhere in it (any case, punctuation, "the"/"and" ignored). */
+function mentionedTitles(item, text){
+  const toks = titleTokens(text), out = [];
+  for(const t of (item.titles || [])){
+    const k = titleTokens(t); if(!k.length) continue;
+    for(let i = 0; i + k.length <= toks.length; i++){ if(k.every((w, j) => toks[i + j] === w)){ out.push(t); break; } }
+  }
+  return out;
+}
 function matchTitlesIn(item, text){
   const known = (item.titles || []).map(t => ({ t, k: titleTokens(t) })).filter(x => x.k.length).sort((a, b) => b.k.length - a.k.length);
   const toks = titleTokens(text);
@@ -3871,7 +3904,36 @@ function renderTitlePage(itemId, title){
   `);
   const cl = buildContactLinesBox(item);
   if(cl.children.length) est.querySelector('[data-holder="contacts"]').appendChild(cl);
-  est.querySelector('[data-holder="notes"]').appendChild(buildEstateNotesBlock(item, { bullets: true }));
+  est.querySelector('[data-holder="notes"]').appendChild(buildEstateNotesBlock(item, { bullets: true, forTitle: title }));
+  { // notes written here for a title that isn't on the Action List
+    const stamp = (t) => (isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : ""));
+    const own = (item.titleNotes || []).filter(t => t.title === title && !richIsEmpty(t.text))
+      .sort((a, b) => (stamp(a) < stamp(b) ? 1 : stamp(a) > stamp(b) ? -1 : 0));
+    for(const t of own){
+      const row = el(`<div class="note-side" style="border-top:1px solid var(--line, #c5d0dc);padding-top:6px;margin-top:6px;"><div class="td-readonly-text"><div class="note-bullet"></div></div><div class="notes-date-row"><span class="notes-date"></span><button class="btn btn-sm btn-ghost" type="button" data-role="ndel">Delete</button></div></div>`);
+      row.querySelector(".note-bullet").innerHTML = t.text;
+      row.querySelector(".notes-date").textContent = stamp(t) ? fmtDateShort(stamp(t)) : "";
+      bindConfirmDelete(row.querySelector('[data-role="ndel"]'), () => { item.titleNotes = item.titleNotes.filter(x => x.id !== t.id); scheduleSave(); render(); }, "Delete");
+      est.querySelector(".panel-pad").appendChild(row);
+    }
+  }
+  {
+    const onList = titleOnActionList(item, title);
+    const addWrap = el(`<div style="margin-top:10px;"><button class="todo-add-btn" type="button" data-role="n-toggle">+ Add note</button>
+      <div class="todo-add-form" data-role="n-form" hidden>
+        <input type="text" class="step-note-input" placeholder="Write a note…" data-role="n-text" />
+        <div class="todo-add-form-row"><input type="date" class="step-note-date-input" data-role="n-date" /><button class="btn btn-sm" type="button" data-role="n-submit">Add</button><button class="btn btn-sm btn-ghost" type="button" data-role="n-close">Close</button></div>
+        <div class="section-note" style="margin-top:4px;">${onList ? "This title is on the Action List, so the note will show there too." : "This title isn't on the Action List, so the note stays here in Notes."}</div>
+      </div></div>`);
+    const form = addWrap.querySelector('[data-role="n-form"]'), nText = addWrap.querySelector('[data-role="n-text"]'), nDate = addWrap.querySelector('[data-role="n-date"]');
+    wrapDateField(nDate, "", "Date (optional)");
+    addWrap.querySelector('[data-role="n-toggle"]').onclick = () => { form.hidden = !form.hidden; if(!form.hidden) nText.focus(); };
+    addWrap.querySelector('[data-role="n-close"]').onclick = () => { form.hidden = true; };
+    const go = () => { if(!nText.value.trim()){ nText.focus(); return; } addTitleNote(item, title, nText.value, nDate.value || ""); };
+    addWrap.querySelector('[data-role="n-submit"]').onclick = go;
+    nText.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); go(); } });
+    est.querySelector(".panel-pad").appendChild(addWrap);
+  }
   wrap.appendChild(est);
 
   // Progress: every to-do for this title, newest first
@@ -4996,6 +5058,7 @@ function renameTitleData(item, oldT, newT){
   for(const t of (item.todos || [])) if(t.title) t.title = swapCombo(t.title);
   for(const d of (item.documents || [])) if(d.title) d.title = swapCombo(d.title);
   if(item.todoTitleLabel){ const lbl = swapCombo(item.todoTitleLabel); item.todoTitleLabel = (lbl === newT || String(item.todoTitleLabel).indexOf("/") === -1) ? item.todoTitleLabel : lbl.toUpperCase(); }
+  for(const n of (item.titleNotes || [])) if(n.title === oldT) n.title = newT;
   item.actionTitles = swapList(item.actionTitles);
   item.priorityTitles = swapList(item.priorityTitles);
   item.demotedTitles = swapList(item.demotedTitles);
@@ -6084,7 +6147,10 @@ function buildEstateNotesBlock(item, opts){
       row.querySelector(".notes-date").textContent = d ? fmtDateShort(d) : "";
       if(opts.bullets){
         const box = row.querySelector(".td-readonly-text");
-        for(const ln of splitRichLines(item.notes)){ const b = document.createElement("div"); b.className = "note-bullet"; b.innerHTML = ln.replace(/^(\s|&nbsp;)+/i, ""); box.appendChild(b); }
+        let lines = splitRichLines(item.notes);
+        // On a title's page, a note line that names other titles of the estate (and not this one) belongs to those titles' pages only.
+        if(opts.forTitle) lines = lines.filter(ln => { const m = mentionedTitles(item, stripTags(ln).replace(/&nbsp;/g, " ")); return !m.length || m.includes(opts.forTitle); });
+        for(const ln of lines){ const b = document.createElement("div"); b.className = "note-bullet"; b.innerHTML = ln.replace(/^(\s|&nbsp;)+/i, ""); box.appendChild(b); }
         // date and Edit sit beside the note, not above it
         row.classList.add("note-side");
         row.appendChild(row.querySelector(".notes-date-row"));
