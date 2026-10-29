@@ -1539,11 +1539,38 @@ function migrateEstateCategory(item){
   if(!ESTATE_CATEGORIES.some(c => c[0] === item.estateCategory)) item.estateCategory = "pursuing";
 }
 const HOLD_FOLLOWUP_DAYS = 14;
-function updateEstateCategory(item, value){
+/** Pursuing / Hold for Now for one title. A title with no setting of its own follows the estate. */
+function titleCategoryOf(item, title){
+  migrateEstateCategory(item);
+  const c = (item.titleCategory || {})[title];
+  return ESTATE_CATEGORIES.some(x => x[0] === c) ? c : item.estateCategory;
+}
+/** True when every title of the estate has the same Pursuing / Hold setting (so the estate itself can show one). */
+function estateCategoriesAgree(item){
+  const ts = (item.titles || []).filter(t => stripTags(t));
+  if(!ts.length) return true;
+  return new Set(ts.map(t => titleCategoryOf(item, t))).size === 1;
+}
+function setTitleCategory(item, title, value){
+  migrateEstateCategory(item);
+  if(titleCategoryOf(item, title) === value) return;
+  if(!item.titleCategory) item.titleCategory = {};
+  const ts = item.titles || [];
+  for(const t of ts) if(!ESTATE_CATEGORIES.some(x => x[0] === item.titleCategory[t])) item.titleCategory[t] = item.estateCategory;
+  const old = item.titleCategory[title] || item.estateCategory;
+  item.titleCategory[title] = value;
+  recordChange(item.id, "item", item.id, item.name, "titleCategory", "Status of " + stripTags(title), estateCategoryLabel(old), estateCategoryLabel(value));
+  const set = new Set(ts.map(t => item.titleCategory[t]));
+  if(set.size === 1){ updateEstateCategory(item, Array.from(set)[0], { keepTitles: true }); return; }   // all agree: the estate follows
+  item.estateCategory = "pursuing";   // mixed: the estate has no single status; it is listed with the ones being pursued
+  scheduleSave(); render();
+}
+function updateEstateCategory(item, value, opts){
   migrateEstateCategory(item);
   const old = item.estateCategory;
   if(old === value) return;
   item.estateCategory = value;
+  if(!(opts && opts.keepTitles)) item.titleCategory = {};   // setting the whole estate sets every title
   recordChange(item.id, "item", item.id, item.name, "estateCategory", "Category", estateCategoryLabel(old), estateCategoryLabel(value));
   if(value === "hold"){
     const followUp = addDaysISO(todayISO(), HOLD_FOLLOWUP_DAYS);
@@ -2077,7 +2104,7 @@ function renderTitleIndex(){
     const first = g.entries[0];
     const health = itemHealth(STATE.data, first.item);
     const colorVar = health === "completed" ? "var(--slate)" : `var(--${health})`;
-    const cats = Array.from(new Set(g.entries.map(e => (ESTATE_CATEGORIES.find(c => c[0] === e.item.estateCategory) || [])[1] || "").filter(Boolean)));
+    const cats = Array.from(new Set(g.entries.map(e => (ESTATE_CATEGORIES.find(c => c[0] === titleCategoryOf(e.item, e.title)) || [])[1] || "").filter(Boolean)));
     const row = el(`
       <div class="pulse-row">
         <div class="pulse-left">
@@ -3719,9 +3746,13 @@ function renderTitlePage(itemId, title){
     <div class="title-page-head">
       <h1 class="title-page-name">${escapeHtml(stripTags(title))}</h1>
       <div class="title-card-estate" data-role="open" title="Open estate">${escapeHtml(item.name)}</div>
+      <select class="phase-status-select" id="t-category" style="margin-top:8px;">
+        ${ESTATE_CATEGORIES.map(([k, l]) => `<option value="${k}" ${titleCategoryOf(item, title) === k ? "selected" : ""}>${escapeHtml(l)}</option>`).join("")}
+      </select>
     </div>
   `);
   head.querySelector('[data-role="open"]').onclick = () => { STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
+  head.querySelector("#t-category").onchange = (e) => setTitleCategory(item, title, e.target.value);
   wrap.appendChild(head);
 
   // To-Dos for this title (plus any that apply to the whole estate)
@@ -4412,9 +4443,9 @@ function renderItemDetail(itemId){
           <option value="yellow" ${item.status==="yellow"?"selected":""}>Override: Yellow</option>
           <option value="red" ${item.status==="red"?"selected":""}>Override: Red</option>
         </select>
-        <select class="phase-status-select" id="f-estate-category" style="margin-top:4px;">
+        ${estateCategoriesAgree(item) ? `<select class="phase-status-select" id="f-estate-category" style="margin-top:4px;">
           ${ESTATE_CATEGORIES.map(([k, l]) => `<option value="${k}" ${item.estateCategory === k ? "selected" : ""}>${escapeHtml(l)}</option>`).join("")}
-        </select>
+        </select>` : ""}
         ${item.estateCategory === "hold" ? `
         <div class="hold-followup-field" style="margin-top:4px;">
           <span class="date-pair-label">Follow up</span>
@@ -4426,7 +4457,7 @@ function renderItemDetail(itemId){
   bindCommit(head.querySelector("#f-name"), v => updateItemField(item, "name", v));
   head.querySelector("#f-status-override").onchange = (e) => updateItemField(item, "status", e.target.value);
   migrateEstateCategory(item);
-  head.querySelector("#f-estate-category").onchange = (e) => updateEstateCategory(item, e.target.value);
+  { const ec = head.querySelector("#f-estate-category"); if(ec) ec.onchange = (e) => updateEstateCategory(item, e.target.value); }
   const delBtn = el(`<button class="btn btn-sm btn-ghost" id="f-delete-estate" type="button" style="margin-top:10px;">Delete estate</button>`);
   head.querySelector(".item-badges").appendChild(delBtn);
   bindConfirmDelete(delBtn, () => deleteEstate(item), "Delete estate", "Click again to delete");
