@@ -2400,6 +2400,34 @@ function todoNoteLines(item){
 /** Alphabetical sort key: ignores tags, case and a leading "The ". */
 function sortKey(v){ return stripTags(v || "").trim().toLowerCase().replace(/^the\s+/, ""); }
 const byName = (a, b) => sortKey(a).localeCompare(sortKey(b));
+/** Words of a title, ignoring case, punctuation and "the"/"and". */
+function titleTokens(x){
+  return stripTags(x).replace(/&nbsp;|\u00a0/g, " ").toLowerCase().split(/[^a-z0-9]+/).filter(w => w && w !== "the" && w !== "and");
+}
+/** If `text` is made up entirely of this estate's own titles - however they are separated (slash, comma, dash, "and" or
+ *  just a space) - returns those titles; otherwise null. */
+function matchTitlesIn(item, text){
+  const known = (item.titles || []).map(t => ({ t, k: titleTokens(t) })).filter(x => x.k.length).sort((a, b) => b.k.length - a.k.length);
+  const toks = titleTokens(text);
+  if(!toks.length || !known.length) return null;
+  const out = [];
+  let i = 0;
+  while(i < toks.length){
+    const hit = known.find(x => x.k.every((w, j) => toks[i + j] === w));
+    if(!hit) return null;
+    if(!out.includes(hit.t)) out.push(hit.t);
+    i += hit.k.length;
+  }
+  return out;
+}
+/** Does this to-do/note belong on `title`'s page? Untitled ones belong to every title of the estate; one filed under several
+ *  titles at once ("Z-Cars / Softly, Softly", "Z-Cars, Softly Softly", ...) belongs to each of them. */
+function todoOnTitle(t, title, item){
+  if(!t.title || t.title === title) return true;
+  if(!item) return false;
+  const m = matchTitlesIn(item, t.title);
+  return !!m && m.includes(title);
+}
 function todoTitlesLabel(item){
   const own = stripTags(item.todoTitleLabel || "").trim();
   if(own) return own.toUpperCase();
@@ -2545,7 +2573,7 @@ function renderTodoItemsEditor(item, opts){
   const canTitle = item.id !== GENERAL_ID && !(onlyTitle && !exact);
   const wrap = el(`<div class="todo-items"></div>`);
   const showTag = !onlyTitle && !exact && !(opts && opts.noTag) && item.id !== GENERAL_ID;
-  const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || !t.title || t.title === onlyTitle)));
+  const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || todoOnTitle(t, onlyTitle, item))));
   // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, newest first.
   const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
   const logRows = base.map((t, i) => ({ t, i })).filter(x => x.t.kind === "note" || (x.t.done && isRecentDone(x.t)))
@@ -3609,7 +3637,7 @@ function renderTitleCard(item, title){
   ].map(([k, v]) => [k, stripTags(v)]).filter(([, v]) => v);
   // To-dos for this title: ones tagged to it, plus estate-level ones with no title.
   const todos = item.todos
-    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && (!t.title || t.title === title))
+    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && todoOnTitle(t, title, item))
     .sort((a, b) => {
       const sa = (a.done ? a.doneAt : a.createdAt) || "", sb = (b.done ? b.doneAt : b.createdAt) || "";
       return sa < sb ? 1 : sa > sb ? -1 : 0;
@@ -3706,7 +3734,7 @@ function renderTitlePage(itemId, title){
 
   // Progress: every to-do for this title, newest first
   const hist = item.todos
-    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && (!t.title || t.title === title))
+    .filter(t => t.kind !== "note" && !richIsEmpty(t.text) && todoOnTitle(t, title, item))
     .sort((a, b) => {
       const sa = (a.done ? a.doneAt : a.createdAt) || "", sb = (b.done ? b.doneAt : b.createdAt) || "";
       return sa < sb ? 1 : sa > sb ? -1 : 0;
@@ -4829,6 +4857,10 @@ function attachTitleRecord(item, title){
   if(!item.titles) item.titles = [];
   const existing = item.titles.find(t => stripTags(t).trim().toLowerCase() === title.trim().toLowerCase());
   if(existing) return existing;
+  // Names that are already titles of this estate (in any spelling or separator) are reused, never added again.
+  const known = matchTitlesIn(item, title);
+  if(known && known.length === 1) return known[0];
+  if(known && known.length > 1) return known.map(t => stripTags(t)).join(" / ");
   item.titles.push(title);
   ensureTitleDetailForTag(item, title);
   recordChange(item.id, "item", item.id, item.name, "titles", "Title added", "", title);
