@@ -2765,7 +2765,7 @@ function renderTodoItemsEditor(item, opts){
     { const sb = r.querySelector(".todo-item-sub"); r.querySelector(".todo-text-row").appendChild(sb); sb.classList.add("todo-row-date"); }
     wrapDateField(nDate, t.date, "Date (optional)");
     nDate.onchange = (e) => updateTodo(item, t.id, "date", e.target.value || "");
-    const nNotes = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow");
+    const nNotes = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow", true);
     r.querySelector('[data-holder="notes"]').appendChild(nNotes);
     bindCommitRich(nNotes, v => updateTodo(item, t.id, "notes", v));
     if(t.locked){ line.contentEditable = "false"; nNotes.contentEditable = "false"; }
@@ -2808,7 +2808,7 @@ function renderTodoItemsEditor(item, opts){
     const dateKey = t.done ? "doneAt" : "date";
     wrapDateField(dateInput, t.done ? t.doneAt : t.date, t.done ? "Completed date" : "Target date");
     dateInput.onchange = (e) => updateTodo(item, t.id, dateKey, e.target.value || "");
-    const notesLine = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow");
+    const notesLine = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow", true);
     r.querySelector('[data-holder="notes"]').appendChild(notesLine);
     bindCommitRich(notesLine, v => updateTodo(item, t.id, "notes", v));
     if(t.locked){
@@ -3999,6 +3999,8 @@ function renderTitlePage(itemId, title){
   }
   head.querySelector("#t-priority").onclick = () => setTitlePriority(item, title, !isTitlePriority(item, title));
   wrap.appendChild(head);
+  // The estate's contacts sit right under the heading, exactly as on the estate page (same record, same lock)
+  { const ecw = el(`<div style="margin:6px 0 22px;"></div>`); ecw.appendChild(renderEstateContactSection(item)); wrap.appendChild(ecw); }
 
   // To-Dos for this title (plus any that apply to the whole estate)
   const todoPanel = el(`<div class="panel"><div class="panel-head"><div><h2>To-Do</h2></div></div><div class="panel-pad"><div data-holder="todo"></div></div></div>`);
@@ -5024,9 +5026,12 @@ function migrateEstateContacts(item){
     item.estateContacts = [];
   }
 }
-function renderEstateContactSection(item){
+function renderEstateContactSection(item, opts){
   migrateEstateContacts(item);
-  const wrap = el(`<div><span class="field-label">Estate Contacts</span><div id="ec-contacts" class="ec-contacts-row"></div></div>`);
+  const locked = !!item.estateContactsLocked;
+  const wrap = el(`<div><div style="display:flex;align-items:center;gap:8px;">${(opts && opts.noLabel) ? "" : `<span class="field-label">Estate Contacts</span>`}<button class="todo-lock ${locked ? "on" : ""}" type="button" data-role="ec-lock" title="${locked ? "Locked (read-only) - click to unlock and edit" : "Lock (make read-only)"}">${lockIconSVG(locked)}</button></div><div id="ec-contacts" class="ec-contacts-row"></div></div>`);
+  if(locked) wrap.classList.add("ec-locked");
+  wrap.querySelector('[data-role="ec-lock"]').onclick = () => { item.estateContactsLocked = !item.estateContactsLocked; scheduleSave(); render(); };
   const holder = wrap.querySelector("#ec-contacts");
   item.estateContacts.forEach((ec, idx) => {
     const block = el(`
@@ -5052,16 +5057,20 @@ function renderEstateContactSection(item){
       const line = createRichTextLine(ec[field] || "", placeholder, "ec-line-input");
       block.querySelector(`[data-holder="${field}-rich"]`).appendChild(line);
       bindCommitRich(line, v => updateEstateContact(item, idx, field, v));
+      if(locked) line.contentEditable = "false";
     });
     const notesEditor = createRichTextEditor(ec.notes || "", "Notes", 20);
     block.querySelector('[data-holder="notes-rich"]').appendChild(notesEditor.wrap);
     bindCommitRich(notesEditor.editable, v => updateEstateContact(item, idx, "notes", v));
     block.querySelector('[data-role="remove"]').onclick = () => removeEstateContact(item, idx);
+    if(locked){ notesEditor.editable.contentEditable = "false"; block.querySelector('[data-role="remove"]').style.display = "none"; }
     holder.appendChild(block);
   });
-  const addBtn = el(`<button class="btn btn-sm" id="ec-add-contact" style="margin-top:2px;">+ Add contact</button>`);
-  addBtn.onclick = () => addEstateContact(item);
-  wrap.appendChild(addBtn);
+  if(!locked){
+    const addBtn = el(`<button class="btn btn-sm" id="ec-add-contact" style="margin-top:2px;">+ Add contact</button>`);
+    addBtn.onclick = () => addEstateContact(item);
+    wrap.appendChild(addBtn);
+  }
   return wrap;
 }
 function addEstateContact(item){
