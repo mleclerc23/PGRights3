@@ -1800,6 +1800,7 @@ function ensureFollowUpTodos(){
     const d = item.holdFollowUpDate;
     if(!item.holdFollowUpManual || item.estateCategory !== "hold" || !isValidDate(d) || d > today || item.holdFollowUpTodoFor === d) continue;
     migrateTodos(item);
+    hideOldOnList(item);
     item.todos.push({ id: uid("tk"), text: escapeHtml(item.holdFollowUpLabel || "Follow up"), date: d, notes: "", done: false, createdAt: today, doneAt: "", title: "", followUp: true });
     item.holdFollowUpTodoFor = d;
     item.actionHidden = false;
@@ -2421,7 +2422,7 @@ const todoAddMode = new Map();
 let todoAddFocus = null;
 function openTodos(item){
   migrateTodos(item);
-  return item.todos.filter(t => !t.done && t.kind !== "note" && !richIsEmpty(t.text));
+  return item.todos.filter(t => !t.done && t.kind !== "note" && !t.offList && !richIsEmpty(t.text));
 }
 /** Completed to-dos stay on the Action List for two months after they were finished. */
 function isRecentDone(t){
@@ -2430,7 +2431,7 @@ function isRecentDone(t){
 }
 function recentDoneTodos(item){
   migrateTodos(item);
-  return item.todos.filter(t => t.done && t.kind !== "note" && !richIsEmpty(t.text) && isRecentDone(t));
+  return item.todos.filter(t => t.done && t.kind !== "note" && !t.offList && !richIsEmpty(t.text) && isRecentDone(t));
 }
 /** Where a note or completed to-do sits in the dated log: a note's own date (else the day it was written), or the day the to-do was finished. */
 function logDate(t){
@@ -2440,13 +2441,13 @@ function logDate(t){
 /** Plain notes added under an estate or title (square bullet, no check box). */
 function openNotes(item){
   migrateTodos(item);
-  return item.todos.filter(t => t.kind === "note" && !richIsEmpty(t.text));
+  return item.todos.filter(t => t.kind === "note" && !t.offList && !richIsEmpty(t.text));
 }
 /** Is this title currently on the Action List (pursuing, priority, and with something open or pinned there)? */
 function titleOnActionList(item, title){
   if(item.actionHidden || titleCategoryOf(item, title) === "hold" || !isTitlePriority(item, title)) return false;
   if((item.actionTitles || []).includes(title)) return true;
-  return item.todos.some(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done) && todoOnTitle(t, title, item));
+  return item.todos.some(t => !t.offList && !richIsEmpty(t.text) && (t.kind === "note" || !t.done) && todoOnTitle(t, title, item));
 }
 /** A note written on a title's own page. If the title is on the Action List it becomes an ordinary Action List note (bullet);
  *  otherwise it is kept in the title's Notes panel (item.titleNotes), and the Action List is not touched. */
@@ -2507,6 +2508,7 @@ function addTodo(item, text, date, title, kind){
   const value = (text || "").trim();
   if(!value) return;
   migrateTodos(item);
+  hideOldOnList(item);
   item.actionHidden = false;
   const rec = { id: uid("tk"), text: escapeHtml(value).replace(/\n/g, "<br>"), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
   if(kind === "note") rec.kind = "note";
@@ -2727,7 +2729,7 @@ function todoTitlesLabel(item){
 function todoSections(item){
   if(!item || item.id === GENERAL_ID) return null;
   migrateTodos(item);
-  const vis = item.todos.filter(t => !t.followUp && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+  const vis = item.todos.filter(t => !t.followUp && !t.offList && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
   // Titles added to this box without a to-do (item.actionTitles) still get a section.
   const pinned = (item.actionTitles || []).filter(t => (item.titles || []).includes(t));
   const tagged = Array.from(new Set(vis.filter(t => t.title).map(t => t.title).concat(pinned)));
@@ -2858,7 +2860,7 @@ function renderTodoItemsEditor(item, opts){
   const canTitle = item.id !== GENERAL_ID && !(onlyTitle && !exact);
   const wrap = el(`<div class="todo-items"></div>`);
   const showTag = !onlyTitle && !exact && !(opts && opts.noTag) && item.id !== GENERAL_ID;
-  const base = item.todos.filter(t => !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || todoOnTitle(t, onlyTitle, item))));
+  const base = item.todos.filter(t => !(opts && opts.actionList && t.offList) && !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || todoOnTitle(t, onlyTitle, item))));
   // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, newest first.
   const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
   const logRows = (opts && opts.openOnly) ? [] : base.map((t, i) => ({ t, i })).filter(x => x.t.kind === "note" || (x.t.done && isRecentDone(x.t)))
@@ -2988,6 +2990,8 @@ function renderTodoItemsEditor(item, opts){
       const name = ti.value.replace(/\s+/g, " ").trim();
       if(!name){ ti.focus(); return; }
       const stored = attachTitleRecord(item, name);
+      hideOldOnList(item);
+      item.actionHidden = false;
       if(!item.actionTitles) item.actionTitles = [];
       if(!item.actionTitles.includes(stored)) item.actionTitles.push(stored);
       todoAddMode.set(addKey, "todo");
@@ -3476,7 +3480,9 @@ function bindFormattedEditing(docEl){
 /** Keep an estate (and optionally one of its titles) on the Action List even with nothing active. */
 function pinToActionList(item, title){
   if(!item || item.id === GENERAL_ID) return;
+  if(title) hideOldOnList(item);
   item.actionPinned = true; item.actionHidden = false;
+  if(!title && Array.isArray(item.todos)) item.todos.forEach(t => { delete t.offList; });
   if(title){
     if(!item.actionTitles) item.actionTitles = [];
     if(!item.actionTitles.includes(title)) item.actionTitles.push(title);
@@ -3485,8 +3491,27 @@ function pinToActionList(item, title){
   scheduleSave();
   render();
 }
+/** An estate that was taken off the Action List comes back with only what is newly added: its older items stay off the list. */
+function hideOldOnList(item){
+  if(!item.actionHidden || !Array.isArray(item.todos)) return;
+  item.todos.forEach(t => { if(!richIsEmpty(t.text)) t.offList = true; });
+}
+/** Take just one section (one title, or the estate's untitled group) off the Action List. Its items stay on the Details pages. */
+function removeTodoSection(item, tag, withUntagged){
+  migrateTodos(item);
+  item.todos.forEach(t => { if(!richIsEmpty(t.text) && ((t.title || "") === tag || (withUntagged && !t.title))) t.offList = true; });
+  item.actionTitles = (item.actionTitles || []).filter(x => x !== tag);
+  recordChange(item.id, "item", item.id, item.name, "actionHidden", "Removed from Action List", "", tag ? stripTags(tag) : item.name);
+  const left = item.todos.some(t => !t.offList && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t))) || (item.actionTitles || []).length;
+  if(!left){ item.actionHidden = true; item.actionPinned = false; }
+  scheduleSave();
+  render();
+}
 function removeTodoEntry(item){
   // Takes the estate off the Action List only. Its to-dos, notes and everything on the Details pages stay as they are.
+  // Everything on it now is marked as off the list, so that adding something new later (a title, say) brings back only that.
+  migrateTodos(item);
+  item.todos.forEach(t => { if(!richIsEmpty(t.text)) t.offList = true; });
   item.actionHidden = true;
   item.actionTitles = [];
   item.actionPinned = false;
@@ -3639,6 +3664,30 @@ function renderTodoTab(){
       saveCollapsed(); syncCollapseAll();
     };
     setTimeout(syncCollapseAll, 0);
+    // Collapse every title / estate box that has no open to-do (notes and finished items don't count).
+    const ce = el(`<button class="btn btn-sm btn-ghost" id="todo-collapse-empty" type="button" style="margin-right:8px;" title="Collapse every title that has no open to-dos">Collapse without to-dos</button>`);
+    head.querySelector(".todo-view-toggle").prepend(ce);
+    const hasOpen = (x) => !!x.querySelector(".todo-item-row:not(.is-done):not(.is-note)");
+    const emptyTargets = () => {
+      const out = [];
+      document.querySelectorAll(".todo-entry").forEach(en => {
+        if(!hasOpen(en)) out.push(en);
+        else en.querySelectorAll(".todo-subsec").forEach(sb => { if(!hasOpen(sb)) out.push(sb); });
+      });
+      return out;
+    };
+    const syncEmptyBtn = () => { const t = emptyTargets(); ce.textContent = t.length && t.every(x => x.classList.contains("collapsed")) ? "Expand without to-dos" : "Collapse without to-dos"; };
+    ce.onclick = () => {
+      const t = emptyTargets();
+      const collapse = !t.every(x => x.classList.contains("collapsed"));
+      for(const x of t){
+        x.classList.toggle("collapsed", collapse);
+        const key = x.dataset.collapseKey || x.dataset.itemId;
+        if(collapse) todoCollapsed.add(key); else todoCollapsed.delete(key);
+      }
+      saveCollapsed(); syncCollapseAll(); syncEmptyBtn();
+    };
+    setTimeout(syncEmptyBtn, 0);
   }
   head.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { STATE.todoView = b.dataset.view; renderOverviewInPlace(); });
   wrap.appendChild(head);
@@ -3850,7 +3899,13 @@ function renderTodoTab(){
       });
     }
     const er = entry.querySelector('[data-role="entry-remove"]');
-    if(er) bindConfirmDelete(er, () => removeTodoEntry(item), "Remove", "Remove all?");
+    if(er){
+      if(secs && secs.length > 1){
+        const s0 = secs[0];
+        const wu0 = !!(s0.withUntagged || (item.todos.some(t => t.followUp && !richIsEmpty(t.text)) && !secs.some(x => x.withUntagged || !x.tag)));
+        bindConfirmDelete(er, () => removeTodoSection(item, s0.tag, wu0), "Remove", "Remove this?");
+      } else bindConfirmDelete(er, () => removeTodoEntry(item), "Remove", "Remove all?");
+    }
     entry.dataset.itemId = item.id;
     const colBtn = entry.querySelector('[data-role="collapse"]');
     colBtn.addEventListener("click", (e) => {
@@ -3864,17 +3919,17 @@ function renderTodoTab(){
     if(!secs){
       // A box whose items all belong to one title: new items must join that title, not land untitled
       // (untitled items would show up under the estate's other titles).
-      const visAll = item.todos.filter(t => !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+      const visAll = item.todos.filter(t => !t.offList && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
       const tags = Array.from(new Set(visAll.filter(t => t.title).map(t => t.title)));
       const ownL = matchTitlesIn(item, stripTags(item.todoTitleLabel || "").trim());
-      if(ownL && ownL.length >= 2 && tags.every(t => ownL.includes(t))) itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
-      else if(tags.length === 1 && item.id !== GENERAL_ID) itemsHolder.appendChild(renderTodoItemsEditor(item, { title: tags[0], exact: true, withUntagged: true, noTag: true }));
-      else itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true }));
+      if(ownL && ownL.length >= 2 && tags.every(t => ownL.includes(t))) itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true, actionList: true }));
+      else if(tags.length === 1 && item.id !== GENERAL_ID) itemsHolder.appendChild(renderTodoItemsEditor(item, { title: tags[0], exact: true, withUntagged: true, noTag: true, actionList: true }));
+      else itemsHolder.appendChild(renderTodoItemsEditor(item, { noTag: true, actionList: true }));
     }
     else secs.forEach((sec, i) => {
       if(!i){
         const first = el(`<div class="todo-sec-first"></div>`);
-        first.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true, withUntagged: sec.withUntagged || (item.todos.some(t => t.followUp && !richIsEmpty(t.text)) && !secs.some(x => x.withUntagged || !x.tag)) }));
+        first.appendChild(renderTodoItemsEditor(item, { actionList: true, title: sec.tag, exact: true, withUntagged: sec.withUntagged || (item.todos.some(t => t.followUp && !richIsEmpty(t.text)) && !secs.some(x => x.withUntagged || !x.tag)) }));
         itemsHolder.appendChild(first);
         return;
       }
@@ -3893,14 +3948,16 @@ function renderTodoTab(){
         if(now) todoCollapsed.add(key); else todoCollapsed.delete(key);
         saveCollapsed(); syncCollapseAll();
       });
-      if(sec.tag && !item.todos.some(t => (t.title === sec.tag || (sec.withUntagged && !t.title)) && !richIsEmpty(t.text))){
-        const rm = el(`<button class="btn btn-sm btn-ghost todo-entry-remove" type="button" title="Take this empty title off the Action List (it stays on the estate)">Remove</button>`);
-        rm.onclick = () => { item.actionTitles = (item.actionTitles || []).filter(t => t !== sec.tag); scheduleSave(); render(); };
+      {
+        const hasItems = item.todos.some(t => !t.offList && ((t.title || "") === sec.tag || (sec.withUntagged && !t.title)) && !richIsEmpty(t.text));
+        const rm = el(`<button class="btn btn-sm btn-ghost todo-entry-remove" type="button" title="Take this section off the Action List (it stays on the estate)">Remove</button>`);
+        const go = () => removeTodoSection(item, sec.tag, !!sec.withUntagged);
+        if(hasItems) bindConfirmDelete(rm, go, "Remove", "Remove this?"); else rm.onclick = go;
         sh.appendChild(rm);
       }
       box.appendChild(sh);
       const body = el(`<div class="todo-sec-body"></div>`);
-      body.appendChild(renderTodoItemsEditor(item, { title: sec.tag, exact: true, withUntagged: sec.withUntagged }));
+      body.appendChild(renderTodoItemsEditor(item, { actionList: true, title: sec.tag, exact: true, withUntagged: sec.withUntagged }));
       box.appendChild(body);
       itemsHolder.appendChild(box);
     });
