@@ -269,6 +269,14 @@
   .seg-toggle button.on{ color:var(--text); }
   .seg-thumb{ opacity:1; position:absolute; top:2px; bottom:2px; left:2px; width:var(--w,50%); border-radius:999px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); transition:transform .22s ease, width .22s ease, opacity .15s; }
   #todo-collapse-empty{ margin-right:6px; }
+  button.awaiting-mark{ background:none; padding:0; cursor:pointer; }
+  button.awaiting-mark:disabled{ cursor:default; opacity:.6; }
+  .awaiting-mark.on{ background:var(--red); border-color:var(--red); color:#fff; }
+  .awaiting-mark{ flex:none; width:18px; height:18px; margin-top:3px; border-radius:50%; border:1.5px solid var(--red); color:var(--red); font-weight:700; font-size:12px; line-height:15px; text-align:center; font-family:inherit; user-select:none; }
+  .todo-item-row.is-awaiting .todo-task-input{ color:#000; font-weight:700; }
+  .todo-item-row.is-awaiting.is-done .todo-task-input{ color:#8a8a8a !important; font-weight:600; }
+  .awaiting-chase{ font-size:11px; color:var(--text-faint); margin:1px 0 2px; }
+  .awaiting-chase b{ font-weight:600; color:var(--text-dim); }
   .todo-view-toggle{ display:flex; gap:6px; align-items:center; }
   .todo-lines{ margin-top:4px; }
   .rich-editable ul, .rich-editable ol, .todo-notes-live ul, .todo-notes-live ol, .progress-notes ul, .td-readonly-text ul{ margin:2px 0; padding-left:20px; list-style:disc; }
@@ -1618,7 +1626,7 @@ async function runSave(){
     if(syncLoadFailed){
       if(theirs){
         // we never managed to read the real data, so what's on screen is only starter data: load the real data instead of overwriting it
-        STATE.data = theirs; syncBaseStr = theirsStr; syncLoadFailed = false; syncDirty = false; normalizeOrder(true); undoReset(); render();
+        STATE.data = theirs; syncBaseStr = theirsStr; syncLoadFailed = false; syncDirty = false; normalizeOrder(true); ensureAwaitingChases(); undoReset(); render();
         setSaveStatus("Saved"); showToast("Reconnected - loaded the latest shared data.");
         return;
       }
@@ -1806,6 +1814,7 @@ function migrateCarriedStepNotes(item){
 function ensureFollowUpTodos(){
   const today = todayISO();
   let changed = false;
+  ensureAwaitingChases();
   for(const item of (STATE.data && STATE.data.items) || []){
     // Follow-up dates the old version filled in automatically never become to-dos; only a date typed by hand does.
     if(!item.holdFollowUpManual && Array.isArray(item.todos) && item.todos.some(t => t.followUp && !t.done)){
@@ -2453,12 +2462,64 @@ const todoAddMode = new Map();
 let todoAddFocus = null;
 function openTodos(item){
   migrateTodos(item);
-  return item.todos.filter(t => !t.done && t.kind !== "note" && !t.offList && !richIsEmpty(t.text));
+  return item.todos.filter(t => !t.done && t.kind !== "note" && t.kind !== "awaiting" && !t.offList && !richIsEmpty(t.text));
+}
+/** Things we are waiting to hear back about. On the chase date they turn into a to-do automatically. */
+function openAwaiting(item){
+  migrateTodos(item);
+  return item.todos.filter(t => t.kind === "awaiting" && !t.done && !t.offList && !richIsEmpty(t.text));
+}
+/** "Awaiting reply from X" -> "Chase reply from X" */
+function chaseTextFor(html){
+  const h = String(html || "").trim();
+  if(/^awaiting\b/i.test(h)) return h.replace(/^awaiting\b[:\s-]*/i, "Chase ").replace(/^Chase\s*$/, "Chase");
+  return "Chase: " + h;
+}
+/** Awaiting items store the day we began waiting (since); the chase date (date) is always two weeks after it. */
+function setAwaitingSince(item, id, value){
+  migrateTodos(item);
+  const t = item.todos.find(x => x.id === id);
+  if(!t) return;
+  const since = isValidDate(value) ? value : (isValidDate(t.since) ? t.since : todayISO());
+  const old = t.since;
+  t.since = since; t.date = addDaysISO(since, 14);
+  if(old !== since) recordChange(item.id, "item", item.id, item.name, "awaitingSince", "Awaiting start date", String(old || ""), since);
+  scheduleSave();
+  render();
+}
+function ensureAwaitingChases(){
+  const today = todayISO();
+  let changed = false;
+  for(const o of ((STATE.data && STATE.data.items) || []).concat(STATE.data && STATE.data.general ? [STATE.data.general] : [])){
+    for(const t of (Array.isArray(o.todos) ? o.todos : [])){
+      if(t.kind === "awaiting" && !isValidDate(t.since)){   // made before start dates existed: its date was the chase date
+        t.since = isValidDate(t.date) ? addDaysISO(t.date, -14) : today; t.date = addDaysISO(t.since, 14); changed = true;
+      }
+    }
+  }
+  const owners = ((STATE.data && STATE.data.items) || []).concat(STATE.data && STATE.data.general ? [STATE.data.general] : []);
+  for(const item of owners){
+    if(!Array.isArray(item.todos) || !item.todos.some(t => t.kind === "awaiting")) continue;
+    for(const t of item.todos.slice()){
+      if(t.kind !== "awaiting" || t.done || !isValidDate(t.date) || t.date > today) continue;
+      const cid = "chase-" + t.id;
+      if(!item.todos.some(x => x.id === cid)){
+        const idx = item.todos.indexOf(t);
+        item.todos.splice(idx, 0, { id: cid, text: chaseTextFor(t.text), date: t.date, notes: t.notes || "", done: false, createdAt: today, doneAt: "", title: t.title || "" });
+        recordChange(item.id, "item", item.id, item.name, "todoAdd", "Chase to-do added (from Awaiting)", stripTags(t.text), stripTags(chaseTextFor(t.text)));
+      }
+      item.todos = item.todos.filter(x => x.id !== t.id);
+      item.actionHidden = false;
+      changed = true;
+    }
+  }
+  if(changed) scheduleSave();
+  return changed;
 }
 /** Completed to-dos stay on the Action List for two months after they were finished. */
 function isRecentDone(t){
   const d = isValidDate(t.doneAt) ? t.doneAt : (isValidDate(t.createdAt) ? t.createdAt : todayISO());
-  return d >= addDaysISO(todayISO(), -60);
+  return d >= addDaysISO(todayISO(), t.kind === "awaiting" ? -91 : -60);   // resolved Awaiting items stay on the list for three months
 }
 function recentDoneTodos(item){
   migrateTodos(item);
@@ -2543,8 +2604,9 @@ function addTodo(item, text, date, title, kind){
   item.actionHidden = false;
   const rec = { id: uid("tk"), text: escapeHtml(value).replace(/\n/g, "<br>"), date: date || "", notes: "", done: false, createdAt: todayISO(), doneAt: "", title: title || "" };
   if(kind === "note") rec.kind = "note";
+  if(kind === "awaiting"){ rec.kind = "awaiting"; rec.since = isValidDate(date) ? date : todayISO(); rec.date = addDaysISO(rec.since, 14); }
   item.todos.push(rec);
-  recordChange(item.id, "item", item.id, item.name, kind === "note" ? "noteAdd" : "todoAdd", kind === "note" ? "Note added" : "To-do added", "", value);
+  recordChange(item.id, "item", item.id, item.name, kind === "note" ? "noteAdd" : kind === "awaiting" ? "awaitingAdd" : "todoAdd", kind === "note" ? "Note added" : kind === "awaiting" ? "Awaiting added" : "To-do added", "", value);
   scheduleSave();
   render();
 }
@@ -2585,7 +2647,7 @@ function updateTodo(item, id, key, value){
   if(key === "done" && !value) t.doneAt = "";
   if(key === "done"){
     if(value){
-      if(!t.textOpen && t.kind !== "note"){ const nt = pastTenseTodo(t.text); if(nt !== t.text){ t.textOpen = t.text; t.text = nt; } }
+      if(!t.textOpen && t.kind !== "note" && t.kind !== "awaiting"){ const nt = pastTenseTodo(t.text); if(nt !== t.text){ t.textOpen = t.text; t.text = nt; } }
       t.pastDone = true;
     }else if(t.textOpen){ t.text = t.textOpen; t.textOpen = ""; }
   }
@@ -2893,7 +2955,7 @@ function renderTodoItemsEditor(item, opts){
   const showTag = !onlyTitle && !exact && !(opts && opts.noTag) && item.id !== GENERAL_ID;
   const base = item.todos.filter(t => !(opts && opts.actionList && t.offList) && !richIsEmpty(t.text) && (exact ? ((t.title || "") === onlyTitle || (withUntagged && !t.title)) : (!onlyTitle || todoOnTitle(t, onlyTitle, item))));
   // Pending to-dos first (urgent on top), then a dated log of notes and recently completed to-dos, newest first.
-  const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && !t.done));
+  const pendingRows = sortedTodos(base.filter(t => t.kind !== "note" && t.kind !== "awaiting" && !t.done)).concat(base.filter(t => t.kind === "awaiting" && !t.done));
   const logRows = (opts && opts.openOnly) ? [] : base.map((t, i) => ({ t, i })).filter(x => x.t.kind === "note" || (x.t.done && isRecentDone(x.t)))
     .sort((a, b) => { const da = logDate(a.t), db = logDate(b.t); return da < db ? 1 : da > db ? -1 : b.i - a.i; }).map(x => x.t);
   const buildNoteRow = (t) => {
@@ -2928,7 +2990,42 @@ function renderTodoItemsEditor(item, opts){
     bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
     return r;
   };
+  const buildAwaitingRow = (t) => {
+    const r = el(`
+      <div class="todo-item-row is-awaiting ${t.done ? "is-done" : ""} ${t.locked ? "is-locked" : ""}">
+        <span class="todo-drag" title="Drag to reorder" data-role="drag">&#10303;</span>
+        <button type="button" class="awaiting-mark ${t.done ? "on" : ""}" data-role="resolve" title="${t.done ? "Mark as awaiting again" : "Mark resolved"}" ${t.locked ? "disabled" : ""}>${t.done ? "&#10003;" : "?"}</button>
+        <div class="todo-item-main">
+          <div class="todo-text-row"><div class="todo-text-holder" data-holder="text"></div></div>
+          <div class="awaiting-chase">${t.done ? `Resolved &middot; waiting since ${escapeHtml(isValidDate(t.since) ? fmtDateShort(t.since) : "")}` : (isValidDate(t.date) ? `Chase on <b>${escapeHtml(fmtDateShort(t.date))}</b> &middot; a to-do is added then` : "")}</div>
+          <div class="todo-item-notes" data-holder="notes"></div>
+          <div class="todo-item-sub"><input type="date" class="step-note-date-input" value="${t.done ? (isValidDate(t.doneAt) ? t.doneAt : "") : (isValidDate(t.since) ? t.since : "")}" data-role="date" ${t.locked ? "disabled" : ""} /></div>
+        </div>
+        ${lockButtonHTML(t)}
+        <button class="ec-remove todo-remove" title="${t.locked ? "Unlock to delete" : "Delete"}" data-role="remove" ${t.locked ? "disabled" : ""}>&times;</button>
+      </div>
+    `);
+    const line = createRichTextLine(t.text || "", "Awaiting…", "todo-task-input", true);
+    r.querySelector('[data-holder="text"]').appendChild(line);
+    bindCommitRich(line, v => updateTodo(item, t.id, "text", v));
+    const aDate = r.querySelector('[data-role="date"]');
+    { const sb = r.querySelector(".todo-item-sub"); r.querySelector(".todo-text-row").appendChild(sb); sb.classList.add("todo-row-date"); }
+    wrapDateField(aDate, t.done ? t.doneAt : t.since, t.done ? "Date resolved" : "Date waiting began");
+    aDate.onchange = (e) => { if(t.done) updateTodo(item, t.id, "doneAt", e.target.value || ""); else setAwaitingSince(item, t.id, e.target.value || ""); };
+    r.querySelector('[data-role="resolve"]').onclick = () => { if(!t.locked) updateTodo(item, t.id, "done", !t.done); };
+    const aNotes = createRichTextLine(richIsEmpty(t.notes) ? "" : t.notes, "Add a note…", "todo-eyebrow", true);
+    r.querySelector('[data-holder="notes"]').appendChild(aNotes);
+    bindCommitRich(aNotes, v => updateTodo(item, t.id, "notes", v));
+    if(t.locked){ line.contentEditable = "false"; aNotes.contentEditable = "false"; }
+    r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
+    bindConfirmDelete(r.querySelector('[data-role="remove"]'), () => removeTodo(item, t.id), "&times;");
+    r.dataset.itemId = item.id; r.dataset.todoId = t.id;
+    if(showTag && t.title) r.querySelector(".todo-item-main").prepend(titleTagEl(item, t.title));
+    bindPointerDrag(r.querySelector('[data-role="drag"]'), r, "todo", item.id, t.id);
+    return r;
+  };
   const buildRow = (t) => {
+    if(t.kind === "awaiting") return buildAwaitingRow(t);
     if(t.kind === "note") return buildNoteRow(t);
     const r = el(`
       <div class="todo-item-row ${t.done ? "is-done" : ""} ${t.locked ? "is-locked" : ""} ${t.urgent ? "is-urgent" : ""}">
@@ -2985,7 +3082,7 @@ function renderTodoItemsEditor(item, opts){
       <button class="todo-add-btn" data-role="add-toggle" type="button">+ Add</button>
       <div class="todo-add-form" ${isOpen ? "" : "hidden"}>
         <div class="todo-add-modes">
-          <button type="button" data-mode="todo">To-do</button><button type="button" data-mode="note">Note</button>${canTitle ? `<button type="button" data-mode="title">Title</button>` : ""}
+          <button type="button" data-mode="todo">To-do</button><button type="button" data-mode="note">Note</button><button type="button" data-mode="awaiting">Awaiting</button>${canTitle ? `<button type="button" data-mode="title">Title</button>` : ""}
         </div>
         ${canTitle ? `<input type="text" class="step-note-input" list="title-list-${item.id}" placeholder="Another title in this estate…" data-role="add-title" hidden />
         <datalist id="title-list-${item.id}">${(item.titles || []).map(t => `<option value="${escapeHtml(stripTags(t))}"></option>`).join("")}</datalist>` : ""}
@@ -3006,14 +3103,19 @@ function renderTodoItemsEditor(item, opts){
   let mode = todoAddMode.get(addKey) || "todo";
   const applyMode = () => {
     add.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === mode));
-    addText.placeholder = mode === "note" ? "Write a note…" : (mode === "title" ? "First to-do for it (optional)…" : "Add a to-do…");
+    addText.placeholder = mode === "note" ? "Write a note…" : (mode === "awaiting" ? "Awaiting reply from…" : (mode === "title" ? "First to-do for it (optional)…" : "Add a to-do…"));
+    if(mode === "awaiting"){ if(!addText.value.trim()) addText.value = "Awaiting "; }
+    else if(addText.value.trim().toLowerCase() === "awaiting") addText.value = "";
     const ti = add.querySelector('[data-role="add-title"]'); if(ti) ti.hidden = mode !== "title";
     const disp = dateWrap.querySelector ? dateWrap.querySelector(".date-field-display.placeholder") : null;
-    addDate.dataset.ph = mode === "note" ? "Date (optional)" : "Target date";
+    addDate.dataset.ph = mode === "note" ? "Date (optional)" : (mode === "awaiting" ? "Waiting since (default: today)" : "Target date");
     if(disp) disp.textContent = addDate.dataset.ph;
     todoAddMode.set(addKey, mode);
   };
-  add.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; applyMode(); addText.focus(); });
+  add.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {
+    mode = b.dataset.mode; applyMode(); addText.focus();
+    if(mode === "awaiting"){ const n = addText.value.length; try{ addText.setSelectionRange(n, n); }catch(e){} }
+  });
   applyMode();
   const submit = () => {
     if(mode === "title"){
@@ -3031,7 +3133,7 @@ function renderTodoItemsEditor(item, opts){
       else { scheduleSave(); render(); }
       return;
     }
-    if(!addText.value.trim()) return;
+    if(!addText.value.trim() || (mode === "awaiting" && addText.value.trim().toLowerCase() === "awaiting")) return;
     todoAddOpen.delete(addKey);   // the form closes once the item is published
     addTodo(item, addText.value, addDate.value || "", onlyTitle, mode);
   };
@@ -3059,7 +3161,7 @@ function renderTodoItemsEditor(item, opts){
 function buildProgressRow(item, t, opts){
   const isNote = t.kind === "note";
   const when = isNote ? (isValidDate(t.date) ? `Note ${fmtDateShort(t.date)}` : (isValidDate(t.createdAt) ? `Note ${fmtDateShort(t.createdAt)}` : "Note")) : t.done
-    ? (isValidDate(t.doneAt) ? `Done ${fmtDateShort(t.doneAt)}` : "Done")
+    ? (isValidDate(t.doneAt) ? `${t.kind === "awaiting" ? "Resolved" : "Done"} ${fmtDateShort(t.doneAt)}` : (t.kind === "awaiting" ? "Resolved" : "Done"))
     : (isValidDate(t.createdAt) ? `Added ${fmtDateShort(t.createdAt)}` : "Open");
   const row = el(`
     <div class="progress-row ${t.locked ? "is-locked" : ""}">
@@ -3068,7 +3170,7 @@ function buildProgressRow(item, t, opts){
         <div data-holder="ptag"></div>
         <div class="progress-text ${t.done ? "is-done" : ""}">${t.text}</div>
         ${stripTags(t.notes) ? `<div class="progress-notes">${t.notes}</div>` : ""}
-        ${!isNote && isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
+        ${!isNote && t.kind !== "awaiting" && isValidDate(t.date) ? `<div class="progress-notes">Target ${fmtDateShort(t.date)}</div>` : ""}
       </div>
       ${t.urgent && !t.done ? `<span class="pill pill-urgent">URGENT</span>` : ""}
       ${t.done && !t.locked ? `<button class="btn btn-sm btn-ghost" data-role="reopen">Reopen</button>` : ""}
@@ -3087,9 +3189,9 @@ function buildProgressRow(item, t, opts){
       const whenEl = row.querySelector(".progress-when");
       const key = isNote ? "date" : "doneAt";
       const cur = isNote ? (isValidDate(t.date) ? t.date : (isValidDate(t.createdAt) ? t.createdAt : "")) : (isValidDate(t.doneAt) ? t.doneAt : "");
-      whenEl.innerHTML = `<span>${isNote ? "Note" : "Done"}</span><input type="date" class="step-note-date-input" value="${cur}" ${t.locked ? "disabled" : ""} />`;
+      whenEl.innerHTML = `<span>${isNote ? "Note" : (t.kind === "awaiting" ? "Resolved" : "Done")}</span><input type="date" class="step-note-date-input" value="${cur}" ${t.locked ? "disabled" : ""} />`;
       const di = whenEl.querySelector("input");
-      wrapDateField(di, cur, isNote ? "Date" : "Date done");
+      wrapDateField(di, cur, isNote ? "Date" : (t.kind === "awaiting" ? "Date resolved" : "Date done"));
       di.onchange = (e) => updateTodo(item, t.id, key, e.target.value || "");
     }
   }
@@ -3168,6 +3270,12 @@ function buildTodoDocHTML(items, heading, editable){
       if(todos.length){
         h += `<ul data-ul="todos" style="list-style-type:square;padding-left:24px;margin:2px 0;">`;
         for(const t of todos) h += todoLi(item, t, "");
+        h += `</ul>`;
+      }
+      const aw = openAwaiting(item).filter(t => !secs || (t.title || "") === sec.tag || (sec.withUntagged && !t.title));
+      if(aw.length){
+        h += `<ul data-ul="awaiting" contenteditable="false" style="list-style-type:'? ';padding-left:24px;margin:2px 0;color:${INK};">`;
+        for(const t of aw) h += `<li style="color:${INK};">${esc(stripTags(t.text))}${isValidDate(t.date) ? ` (chase ${esc(fmtDateShort(t.date))})` : ""}</li>`;
         h += `</ul>`;
       }
       h += `</li>`;
@@ -3679,7 +3787,7 @@ function renderTodoTab(){
     </div>
   `);
   // Title / estate boxes with no open to-do (notes and finished items don't count).
-  const hasOpen = (x) => !!x.querySelector(".todo-item-row:not(.is-done):not(.is-note)");
+  const hasOpen = (x) => !!x.querySelector(".todo-item-row:not(.is-done):not(.is-note):not(.is-awaiting)");
   const emptyTargets = () => {
     const out = [];
     document.querySelectorAll(".todo-entry").forEach(en => {
@@ -3740,7 +3848,7 @@ function renderTodoTab(){
   const ordIdx = (i) => { const k = order.indexOf(i.id); return k === -1 ? 1e9 : k; };
   const entryLabel = (i) => { const sc = todoSections(i); return (sc ? sc[0].label : todoTitlesLabel(i)) || i.name; };
   const rows = open.concat([general])
-    .filter(i => i.id === GENERAL_ID || (!i.actionHidden && (openTodos(i).length || openNotes(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i)))))
+    .filter(i => i.id === GENERAL_ID || (!i.actionHidden && (openTodos(i).length || openNotes(i).length || openAwaiting(i).length || recentDoneTodos(i).length || holdDate(i) || i.actionPinned || (i.actionTitles && i.actionTitles.length && todoSections(i)))))
     .sort((a, b) => {
       // Urgent first, then General, then everything else alphabetically by title / estate.
       if(hasUrgent(a) !== hasUrgent(b)) return hasUrgent(a) ? -1 : 1;
@@ -3749,7 +3857,7 @@ function renderTodoTab(){
     });
 
   if(view === "formatted"){
-    const withTodos = rows.filter(i => openTodos(i).length || openNotes(i).length);
+    const withTodos = rows.filter(i => openTodos(i).length || openNotes(i).length || openAwaiting(i).length);
     const panel = el(`
       <div class="panel">
         <div class="panel-head"><div><h2>Formatted</h2></div><div><span class="todo-copy-msg" id="todo-copy-msg"></span> <button class="btn btn-sm" id="todo-pdf" title="Opens the print dialog: choose Save as PDF, or print directly">PDF / Print</button> <button class="btn btn-sm" id="todo-copy">Copy</button></div></div>
@@ -6790,6 +6898,7 @@ function showAccessGate(onUnlock){
     STATE.data = await loadData();
     purgeTrashFiles();
     normalizeOrder(true);
+    ensureAwaitingChases();
     undoReset();
     try{ applyNav(history.state); }catch(e){}   // a refresh stays on the same page
     render();
