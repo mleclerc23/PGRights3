@@ -258,10 +258,17 @@
   .todo-head-tools{ display:flex; gap:14px; align-items:center; }
   .tool-link{ background:none; border:none; padding:4px 2px; font:inherit; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; }
   .tool-link:hover{ color:var(--text); text-decoration:underline; text-underline-offset:3px; }
+  .switch-wrap{ display:inline-flex; align-items:center; gap:7px; background:none; border:none; padding:2px; cursor:pointer; font:inherit; font-size:12px; font-weight:600; color:var(--text-dim); }
+  .switch-wrap:hover .switch-label{ color:var(--text); }
+  .switch-track{ position:relative; width:28px; height:16px; border-radius:999px; background:rgba(120,140,160,.35); transition:background .2s; flex:none; }
+  .switch-knob{ position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .2s ease; }
+  .switch-wrap[aria-checked="true"] .switch-track{ background:var(--text, #1d2b3a); }
+  .switch-wrap[aria-checked="true"] .switch-knob{ transform:translateX(12px); }
   .seg-toggle{ position:relative; display:inline-flex; padding:2px; border-radius:999px; background:rgba(120,140,160,.18); }
   .seg-toggle button{ position:relative; z-index:1; background:none; border:none; padding:4px 12px; font:inherit; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; border-radius:999px; transition:color .2s; white-space:nowrap; }
   .seg-toggle button.on{ color:var(--text); }
-  .seg-thumb{ position:absolute; top:2px; bottom:2px; left:2px; width:var(--w,50%); border-radius:999px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); transition:transform .22s ease, width .22s ease; }
+  .seg-thumb{ opacity:1; position:absolute; top:2px; bottom:2px; left:2px; width:var(--w,50%); border-radius:999px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); transition:transform .22s ease, width .22s ease, opacity .15s; }
+  #todo-collapse-empty{ margin-right:6px; }
   .todo-view-toggle{ display:flex; gap:6px; align-items:center; }
   .todo-lines{ margin-top:4px; }
   .rich-editable ul, .rich-editable ol, .todo-notes-live ul, .todo-notes-live ol, .progress-notes ul, .td-readonly-text ul{ margin:2px 0; padding-left:20px; list-style:disc; }
@@ -2083,7 +2090,22 @@ window.addEventListener("popstate", (e) => {
   navPopping = true; navKey = JSON.stringify(navSnapshot());
   try{ STATE.modal = null; render(); window.scrollTo(0, 0); } finally { navPopping = false; }
 });
+/** Put a sliding toggle's white thumb under its selected button (hidden when neither is selected). */
+function placeSeg(seg){
+  const on = seg.querySelector("button.on"), th = seg.querySelector(".seg-thumb");
+  if(!th) return;
+  if(!on){ th.style.opacity = "0"; return; }
+  th.style.opacity = "1"; th.style.width = on.offsetWidth + "px"; th.style.transform = "translateX(" + (on.offsetLeft - 2) + "px)";
+}
+let lastViewKey = "";
 function render(){
+  // Editing something rebuilds the page; keep the reader where they were unless they moved to a different page.
+  const viewKey = [STATE.tab, STATE.view, STATE.currentItemId, STATE.currentTitle ? STATE.currentTitle.itemId + "|" + STATE.currentTitle.title : ""].join("~");
+  const keepY = (viewKey === lastViewKey) ? (window.scrollY || document.documentElement.scrollTop || 0) : 0;
+  lastViewKey = viewKey;
+  try{ renderInner(); } finally { if(keepY) window.scrollTo(0, keepY); }
+}
+function renderInner(){
   syncHistory();
   if(STATE.modal === "quick-add"){ if(quickAddFresh) quickAddFresh = false; else STATE.modal = null; }   // any action in the pop-up closes it
   const root = document.getElementById("app");
@@ -2170,8 +2192,10 @@ function renderTopbar(){
 function renderOverviewInPlace(){
   const holder = document.getElementById("overview-holder");
   if(!holder){ render(); return; }
+  const y = window.scrollY || 0;
   holder.innerHTML = "";
   holder.appendChild(renderCurrentTabBody());
+  if(y) window.scrollTo(0, y);
 }
 function renderCurrentTabBody(){
   if(STATE.tab === "changes") return renderChangesTab();
@@ -3658,22 +3682,26 @@ function renderTodoTab(){
     const btn = head.querySelector("#todo-collapse-all");
     if(!btn) return;
     const ents = Array.from(document.querySelectorAll(".todo-entry, .todo-subsec"));
-    btn.textContent = ents.length && ents.every(x => x.classList.contains("collapsed")) ? "Expand all" : "Collapse all";
+    const allC = ents.length > 0 && ents.every(x => x.classList.contains("collapsed")), noneC = ents.every(x => !x.classList.contains("collapsed"));
+    btn.querySelector('[data-act="collapse"]').classList.toggle("on", allC);
+    btn.querySelector('[data-act="expand"]').classList.toggle("on", !allC && noneC);
+    placeSeg(btn);
   };
   if(view === "list"){
-    const ca = el(`<button class="tool-link" id="todo-collapse-all" type="button">Collapse all</button>`);
+    const ca = el(`<div class="seg-toggle" id="todo-collapse-all" role="group" aria-label="Collapse or expand every box"><span class="seg-thumb"></span><button type="button" data-act="expand">Expand all</button><button type="button" data-act="collapse">Collapse all</button></div>`);
     head.querySelector(".todo-head-tools").prepend(ca);
-    ca.onclick = () => {
+    ca.querySelectorAll("button").forEach(bt => bt.onclick = () => {
       const ents = Array.from(document.querySelectorAll(".todo-entry, .todo-subsec"));
-      const collapse = !ents.every(x => x.classList.contains("collapsed"));
+      const collapse = bt.dataset.act === "collapse";
       for(const x of ents){
         x.classList.toggle("collapsed", collapse);
         const key = x.dataset.collapseKey || x.dataset.itemId;
         if(collapse) todoCollapsed.add(key); else todoCollapsed.delete(key);
       }
       saveCollapsed(); syncCollapseAll();
-    };
+    });
     setTimeout(syncCollapseAll, 0);
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncCollapseAll);
     // Collapse every title / estate box that has no open to-do (notes and finished items don't count).
     const ce = el(`<button class="tool-link" id="todo-collapse-empty" type="button" title="Collapse every title that has no open to-dos">Collapse without to-dos</button>`);
     head.querySelector(".todo-head-tools").prepend(ce);
@@ -3686,18 +3714,13 @@ function renderTodoTab(){
       });
       return out;
     };
-    const syncEmptyBtn = () => { const t = emptyTargets(); ce.textContent = t.length && t.every(x => x.classList.contains("collapsed")) ? "Expand without to-dos" : "Collapse without to-dos"; };
     ce.onclick = () => {
-      const t = emptyTargets();
-      const collapse = !t.every(x => x.classList.contains("collapsed"));
-      for(const x of t){
-        x.classList.toggle("collapsed", collapse);
-        const key = x.dataset.collapseKey || x.dataset.itemId;
-        if(collapse) todoCollapsed.add(key); else todoCollapsed.delete(key);
+      for(const x of emptyTargets()){
+        x.classList.add("collapsed");
+        todoCollapsed.add(x.dataset.collapseKey || x.dataset.itemId);
       }
-      saveCollapsed(); syncCollapseAll(); syncEmptyBtn();
+      saveCollapsed(); syncCollapseAll();
     };
-    setTimeout(syncEmptyBtn, 0);
   }
   const segT = head.querySelector(".seg-toggle");
   const placeThumb = () => { const bs = segT.querySelectorAll("button"), on = segT.querySelector("button.on") || bs[0], th = segT.querySelector(".seg-thumb"); th.style.width = on.offsetWidth + "px"; th.style.transform = "translateX(" + (on.offsetLeft - 2) + "px)"; };
