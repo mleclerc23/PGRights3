@@ -255,6 +255,13 @@
   .pill-urgent{ background: var(--red); color:#fff; }
   .todo-heading-holder{ margin-bottom:10px; }
   .todo-heading-input{ font-weight:700; font-size:14px; border-bottom:1px dashed var(--border); padding:4px 0; }
+  .todo-head-tools{ display:flex; gap:14px; align-items:center; }
+  .tool-link{ background:none; border:none; padding:4px 2px; font:inherit; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; }
+  .tool-link:hover{ color:var(--text); text-decoration:underline; text-underline-offset:3px; }
+  .seg-toggle{ position:relative; display:inline-flex; padding:2px; border-radius:999px; background:rgba(120,140,160,.18); }
+  .seg-toggle button{ position:relative; z-index:1; background:none; border:none; padding:4px 12px; font:inherit; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; border-radius:999px; transition:color .2s; white-space:nowrap; }
+  .seg-toggle button.on{ color:var(--text); }
+  .seg-thumb{ position:absolute; top:2px; bottom:2px; left:2px; width:var(--w,50%); border-radius:999px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); transition:transform .22s ease, width .22s ease; }
   .todo-view-toggle{ display:flex; gap:6px; align-items:center; }
   .todo-lines{ margin-top:4px; }
   .rich-editable ul, .rich-editable ol, .todo-notes-live ul, .todo-notes-live ol, .progress-notes ul, .td-readonly-text ul{ margin:2px 0; padding-left:20px; list-style:disc; }
@@ -2713,7 +2720,7 @@ function todoTitlesLabel(item){
   if(own) return own.toUpperCase();
   if(Array.isArray(item.todos)){
     // Everything shown in the box (open, notes, recently completed) decides the heading, so finishing a to-do never changes it.
-    const open = item.todos.filter(t => !t.followUp && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
+    const open = item.todos.filter(t => !t.followUp && !t.offList && !richIsEmpty(t.text) && (t.kind === "note" || !t.done || isRecentDone(t)));
     if(!open.length && item.todos.some(t => t.followUp && !richIsEmpty(t.text))) return "";   // only a follow-up to-do: headed by the estate alone
     if(open.length && open.every(t => t.title)){
       const tagged = new Set(open.map(t => t.title));
@@ -3638,9 +3645,12 @@ function renderTodoTab(){
   const head = el(`
     <div class="page-head">
       <div><h1 class="page-title">Action List</h1></div>
-      <div class="todo-view-toggle">
-        <button class="btn btn-sm ${view === "list" ? "" : "btn-ghost"}" data-view="list">Working list</button>
-        <button class="btn btn-sm ${view === "formatted" ? "" : "btn-ghost"}" data-view="formatted">Formatted</button>
+      <div class="todo-head-tools">
+        <div class="seg-toggle" data-pos="${view === "formatted" ? "1" : "0"}" role="group" aria-label="View">
+          <span class="seg-thumb"></span>
+          <button type="button" class="${view === "list" ? "on" : ""}" data-view="list">Working list</button>
+          <button type="button" class="${view === "formatted" ? "on" : ""}" data-view="formatted">Formatted</button>
+        </div>
       </div>
     </div>
   `);
@@ -3651,8 +3661,8 @@ function renderTodoTab(){
     btn.textContent = ents.length && ents.every(x => x.classList.contains("collapsed")) ? "Expand all" : "Collapse all";
   };
   if(view === "list"){
-    const ca = el(`<button class="btn btn-sm btn-ghost" id="todo-collapse-all" type="button" style="margin-right:8px;">Collapse all</button>`);
-    head.querySelector(".todo-view-toggle").prepend(ca);
+    const ca = el(`<button class="tool-link" id="todo-collapse-all" type="button">Collapse all</button>`);
+    head.querySelector(".todo-head-tools").prepend(ca);
     ca.onclick = () => {
       const ents = Array.from(document.querySelectorAll(".todo-entry, .todo-subsec"));
       const collapse = !ents.every(x => x.classList.contains("collapsed"));
@@ -3665,8 +3675,8 @@ function renderTodoTab(){
     };
     setTimeout(syncCollapseAll, 0);
     // Collapse every title / estate box that has no open to-do (notes and finished items don't count).
-    const ce = el(`<button class="btn btn-sm btn-ghost" id="todo-collapse-empty" type="button" style="margin-right:8px;" title="Collapse every title that has no open to-dos">Collapse without to-dos</button>`);
-    head.querySelector(".todo-view-toggle").prepend(ce);
+    const ce = el(`<button class="tool-link" id="todo-collapse-empty" type="button" title="Collapse every title that has no open to-dos">Collapse without to-dos</button>`);
+    head.querySelector(".todo-head-tools").prepend(ce);
     const hasOpen = (x) => !!x.querySelector(".todo-item-row:not(.is-done):not(.is-note)");
     const emptyTargets = () => {
       const out = [];
@@ -3689,7 +3699,15 @@ function renderTodoTab(){
     };
     setTimeout(syncEmptyBtn, 0);
   }
-  head.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { STATE.todoView = b.dataset.view; renderOverviewInPlace(); });
+  const segT = head.querySelector(".seg-toggle");
+  const placeThumb = () => { const bs = segT.querySelectorAll("button"), on = segT.querySelector("button.on") || bs[0], th = segT.querySelector(".seg-thumb"); th.style.width = on.offsetWidth + "px"; th.style.transform = "translateX(" + (on.offsetLeft - 2) + "px)"; };
+  setTimeout(placeThumb, 0);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(placeThumb);
+  head.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
+    if(b.dataset.view === (STATE.todoView || "list")) return;
+    segT.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); placeThumb();
+    setTimeout(() => { STATE.todoView = b.dataset.view; renderOverviewInPlace(); }, 230);
+  });
   wrap.appendChild(head);
 
   const today = todayISO();
