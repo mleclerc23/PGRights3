@@ -3678,22 +3678,36 @@ function renderTodoTab(){
       </div>
     </div>
   `);
+  // Title / estate boxes with no open to-do (notes and finished items don't count).
+  const hasOpen = (x) => !!x.querySelector(".todo-item-row:not(.is-done):not(.is-note)");
+  const emptyTargets = () => {
+    const out = [];
+    document.querySelectorAll(".todo-entry").forEach(en => {
+      if(!hasOpen(en)) out.push(en);
+      else en.querySelectorAll(".todo-subsec").forEach(sb => { if(!hasOpen(sb)) out.push(sb); });
+    });
+    return out;
+  };
   const syncCollapseAll = () => {
     const btn = head.querySelector("#todo-collapse-all");
     if(!btn) return;
     const ents = Array.from(document.querySelectorAll(".todo-entry, .todo-subsec"));
     const allC = ents.length > 0 && ents.every(x => x.classList.contains("collapsed")), noneC = ents.every(x => !x.classList.contains("collapsed"));
+    const emp = emptyTargets();
+    const empMode = !allC && !noneC && emp.length > 0 && ents.every(x => x.classList.contains("collapsed") === emp.includes(x));
     btn.querySelector('[data-act="collapse"]').classList.toggle("on", allC);
     btn.querySelector('[data-act="expand"]').classList.toggle("on", !allC && noneC);
+    btn.querySelector('[data-act="empty"]').classList.toggle("on", empMode);
     placeSeg(btn);
   };
   if(view === "list"){
-    const ca = el(`<div class="seg-toggle" id="todo-collapse-all" role="group" aria-label="Collapse or expand every box"><span class="seg-thumb"></span><button type="button" data-act="expand">Expand all</button><button type="button" data-act="collapse">Collapse all</button></div>`);
+    const ca = el(`<div class="seg-toggle" id="todo-collapse-all" role="group" aria-label="Collapse or expand boxes"><span class="seg-thumb"></span><button type="button" data-act="collapse">Collapse all</button><button type="button" data-act="expand">Expand all</button><button type="button" data-act="empty" title="Collapse every title that has no open to-dos">Collapse without to-dos</button></div>`);
     head.querySelector(".todo-head-tools").prepend(ca);
     ca.querySelectorAll("button").forEach(bt => bt.onclick = () => {
       const ents = Array.from(document.querySelectorAll(".todo-entry, .todo-subsec"));
-      const collapse = bt.dataset.act === "collapse";
+      const emp = bt.dataset.act === "empty" ? emptyTargets() : [];
       for(const x of ents){
+        const collapse = bt.dataset.act === "collapse" || (bt.dataset.act === "empty" && emp.includes(x));
         x.classList.toggle("collapsed", collapse);
         const key = x.dataset.collapseKey || x.dataset.itemId;
         if(collapse) todoCollapsed.add(key); else todoCollapsed.delete(key);
@@ -3702,27 +3716,8 @@ function renderTodoTab(){
     });
     setTimeout(syncCollapseAll, 0);
     if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncCollapseAll);
-    // Collapse every title / estate box that has no open to-do (notes and finished items don't count).
-    const ce = el(`<button class="tool-link" id="todo-collapse-empty" type="button" title="Collapse every title that has no open to-dos">Collapse without to-dos</button>`);
-    head.querySelector(".todo-head-tools").prepend(ce);
-    const hasOpen = (x) => !!x.querySelector(".todo-item-row:not(.is-done):not(.is-note)");
-    const emptyTargets = () => {
-      const out = [];
-      document.querySelectorAll(".todo-entry").forEach(en => {
-        if(!hasOpen(en)) out.push(en);
-        else en.querySelectorAll(".todo-subsec").forEach(sb => { if(!hasOpen(sb)) out.push(sb); });
-      });
-      return out;
-    };
-    ce.onclick = () => {
-      for(const x of emptyTargets()){
-        x.classList.add("collapsed");
-        todoCollapsed.add(x.dataset.collapseKey || x.dataset.itemId);
-      }
-      saveCollapsed(); syncCollapseAll();
-    };
   }
-  const segT = head.querySelector(".seg-toggle");
+  const segT = head.querySelector('.seg-toggle[aria-label="View"]');
   const placeThumb = () => { const bs = segT.querySelectorAll("button"), on = segT.querySelector("button.on") || bs[0], th = segT.querySelector(".seg-thumb"); th.style.width = on.offsetWidth + "px"; th.style.transform = "translateX(" + (on.offsetLeft - 2) + "px)"; };
   setTimeout(placeThumb, 0);
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(placeThumb);
