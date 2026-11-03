@@ -275,6 +275,9 @@
   .awaiting-mark{ flex:none; width:18px; height:18px; margin-top:3px; border-radius:50%; border:1.5px solid var(--red); color:var(--red); font-weight:700; font-size:12px; line-height:15px; text-align:center; font-family:inherit; user-select:none; }
   .todo-item-row.is-awaiting .todo-task-input{ color:#000; font-weight:700; }
   .todo-item-row.is-awaiting.is-done .todo-task-input{ color:#8a8a8a !important; font-weight:600; }
+  .awaiting-addnote{ background:none; border:none; padding:0 0 0 8px; font:inherit; font-size:11px; color:var(--text-faint); cursor:pointer; }
+  .awaiting-addnote:hover{ color:var(--text); text-decoration:underline; }
+  .todo-items .todo-item-row.is-awaiting.is-done .todo-eyebrow.show:empty{ display:block !important; }
   .awaiting-chase{ font-size:11px; color:var(--text-faint); margin:1px 0 2px; }
   .awaiting-chase b{ font-weight:600; color:var(--text-dim); }
   .todo-view-toggle{ display:flex; gap:6px; align-items:center; }
@@ -3017,6 +3020,12 @@ function renderTodoItemsEditor(item, opts){
     r.querySelector('[data-holder="notes"]').appendChild(aNotes);
     bindCommitRich(aNotes, v => updateTodo(item, t.id, "notes", v));
     if(t.locked){ line.contentEditable = "false"; aNotes.contentEditable = "false"; }
+    if(t.done && !t.locked && richIsEmpty(t.notes)){
+      // resolved items hide an empty note line, so offer a way to start one
+      const addNote = el(`<button type="button" class="awaiting-addnote">+ Add note</button>`);
+      r.querySelector(".awaiting-chase").appendChild(addNote);
+      addNote.onclick = () => { aNotes.classList.add("show"); addNote.remove(); aNotes.focus(); };
+    }
     r.querySelector('[data-role="lock"]').onclick = () => updateTodo(item, t.id, "locked", !t.locked);
     bindConfirmDelete(r.querySelector('[data-role="remove"]'), () => removeTodo(item, t.id), "&times;");
     r.dataset.itemId = item.id; r.dataset.todoId = t.id;
