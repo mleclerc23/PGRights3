@@ -226,6 +226,11 @@
   .title-card-estate:hover{ text-decoration:underline; text-decoration-color: var(--gold); text-decoration-thickness:2px; }
   .title-card-facts{ display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:8px; font-size:12px; color: var(--text-dim); }
   .title-card-facts b{ font-weight:600; color: var(--text-faint); font-family: var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; margin-right:3px; }
+  .todo-logline{ margin:0 0 2px 25px; color:#000; }
+  .todo-logline-line{ font-weight:700; font-style:italic; line-height:1.45; }
+  .todo-logline-line:not(.has-q)::before{ content:"\""; }
+  .todo-logline-line:not(.has-q)::after{ content:"\""; }
+  .todo-subsec > .todo-logline{ margin-left:22px; }
   .title-card-logline{ margin-top:8px; font-size:12.5px; color: var(--text-dim); line-height:1.5; }
   .todo-entry-titles, .todo-entry-name{ color: #2B6FAE; }
   .todo-text-row{ display:flex; align-items:center; gap:8px; }
@@ -2822,6 +2827,23 @@ function todoTitlesLabel(item){
 }
 /** When one estate's Action List box covers several titles, each title gets its own section (same look as the first),
  *  sorted alphabetically. Returns null when a single heading is enough.  [{ tag: "" | title string, label: "CALLAN" }] */
+/** A title's logline (from its Details page), for display on the Action List. */
+function titleLoglineFor(item, titleStr){
+  const key = stripTags(titleStr || "").trim().toUpperCase();
+  if(!key) return "";
+  const td = (item.titleDetails || []).find(d => stripTags(d.title || "").trim().toUpperCase() === key);
+  return td && stripTags(td.logline || "").trim() ? td.logline : "";
+}
+/** The logline(s) for a heading made of one or more title names ("A / B"), as bold italic lines. */
+function buildLoglineBlock(item, headingText){
+  const parts = String(headingText || "").split(" / ").map(x => x.trim()).filter(Boolean);
+  const html = parts.map(p => titleLoglineFor(item, p)).filter(Boolean);
+  if(!html.length) return null;
+  const box = document.createElement("div");
+  box.className = "todo-logline";
+  box.innerHTML = html.map(h => { const pl = stripTags(h).trim(); const q = /^["“”]/.test(pl) && /["“”]$/.test(pl); return `<div class="todo-logline-line${q ? " has-q" : ""}">${h}</div>`; }).join("");
+  return box;
+}
 function todoSections(item){
   if(!item || item.id === GENERAL_ID) return null;
   migrateTodos(item);
@@ -3997,6 +4019,7 @@ function renderTodoTab(){
       if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); insertLinkAtSelection(liveNotes); }
     });
     if(!isGeneral) entry.querySelector('[data-holder="items"]').before(liveNotes);
+    if(!isGeneral && titles){ const lg = buildLoglineBlock(item, titles); if(lg) entry.querySelector(".todo-entry-head").after(lg); }
     entry.querySelector('[data-role="open"]').onclick = (ev) => { if(isGeneral) return; if(ev && ev.target && ev.target.closest && ev.target.closest(".todo-entry-titles.editing")) return; if(entry.querySelector(".todo-entry-titles.editing")) return; STATE.view = "detail"; STATE.currentItemId = item.id; render(); };
     const tEl = entry.querySelector(".todo-entry-titles");
     if(tEl){
@@ -4109,6 +4132,7 @@ function renderTodoTab(){
         sh.appendChild(rm);
       }
       box.appendChild(sh);
+      if(sec.tag){ const lg = buildLoglineBlock(item, sec.label); if(lg) box.appendChild(lg); }
       const body = el(`<div class="todo-sec-body"></div>`);
       body.appendChild(renderTodoItemsEditor(item, { actionList: true, title: sec.tag, exact: true, withUntagged: sec.withUntagged }));
       box.appendChild(body);
